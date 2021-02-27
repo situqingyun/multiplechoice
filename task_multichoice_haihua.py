@@ -8,9 +8,8 @@ from model.modeling_nezha import NeZhaForMultipleChoice
 from model.configuration_nezha import NeZhaConfig
 from transformers import BertForMultipleChoice, BertConfig, BertTokenizer, WEIGHTS_NAME
 from torchblocks.processor import TextClassifierProcessor, InputExample
-from torchblocks.trainer.classifier_trainer import FreelbTrainer
+from torchblocks.trainer.classifier_trainer import FreelbTrainer, TextClassifierTrainer
 from multiple_choice_processor import MultipleChoiceProcessor
-# from trainer.multiple_choice_trainer import FreelbTrainer
 
 import json
 
@@ -142,7 +141,7 @@ def main():
 
     # trainer
     logger.info("initializing traniner")
-    trainer = FreelbTrainer(logger=logger, args=args, collate_fn=processor.collate_fn,
+    trainer = TextClassifierTrainer(logger=logger, args=args, collate_fn=processor.collate_fn,
                             input_keys=processor.get_input_keys(),
                             metrics=[Accuracy()])
     # do train
