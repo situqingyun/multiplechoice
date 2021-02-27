@@ -2,7 +2,6 @@ import logging
 from torchblocks.processor.base import DataProcessor
 from torchblocks.processor.utils import InputFeatures
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -10,8 +9,8 @@ class MultipleChoiceProcessor(DataProcessor):
     """
         多选题
     """
+
     def convert_to_features(self, examples, label_list, max_seq_length):
-        # TODO: convert_to_features没有做，需要修改
         '''
         文本分类
         '''
@@ -42,19 +41,20 @@ class MultipleChoiceProcessor(DataProcessor):
 
             # inputs = self.encode(texts, max_seq_length)
 
-            input_ids=list()
+            input_ids = list()
             attention_masks = list()
             token_type_ids = list()
 
             for count, text in enumerate(texts):
                 inputs = self.encode(text, max_seq_length)
-                input_id = inputs['input_ids'][0]
-                attention_mask = inputs['attention_mask'][0]
-                token_type_id = inputs['token_type_ids'][0]
+                input_id = inputs['input_ids']
+                attention_mask = inputs['attention_mask']
+                token_type_id = inputs['token_type_ids']
                 input_ids.append(input_id)
                 attention_masks.append(attention_mask)
                 token_type_ids.append(token_type_id)
 
+            count += 1
             # for count, (input_id, attention_mask, token_type_id) in enumerate(inputs):
             #     input_ids.append(input_id)
             #     attention_masks.append(attention_mask)
@@ -98,5 +98,3 @@ class MultipleChoiceProcessor(DataProcessor):
 
             features.append(InputFeatures(**inputs))
         return features
-
-

@@ -80,7 +80,7 @@ class CommonDataProcessor(MultipleChoiceProcessor):
                 examples.append(
                     InputExample(
                         guid=int(Id),
-                        texts=[[context, question + ' ' + i[2:]] for i in choice],
+                        texts=[[question + ' ' + i[2:], context] for i in choice],
                         # texts=[[question + ' ' + i[2:] for i in choice], [context for i in choice]],
                         label=label
                     )
