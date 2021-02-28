@@ -164,8 +164,8 @@ def main():
         train_dataset, eval_dataset = random_split(train_dataset, [train_size, val_size])
 
         if args.do_debug:
-            train_dataset, _ = random_split(train_dataset, [10, len(train_dataset)-10])
-            eval_dataset, _ = random_split(eval_dataset, [10, len(eval_dataset)-10])
+            train_dataset, _ = random_split(train_dataset, [2, len(train_dataset)-2])
+            eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset)-2])
 
         trainer.train(model, train_dataset=train_dataset, eval_dataset=eval_dataset)
     # do eval
@@ -204,7 +204,7 @@ def main():
         test_dataset = processor.create_dataset(args.eval_max_seq_length, 'validation.json', 'test')
 
         if args.do_debug:
-            test_dataset, _ = random_split(test_dataset, [10, len(test_dataset)-10])
+            test_dataset, _ = random_split(test_dataset, [2, len(test_dataset)-2])
 
         if args.checkpoint_number != 0:
             checkpoints = get_checkpoints(args.output_dir, args.checkpoint_number, WEIGHTS_NAME)
