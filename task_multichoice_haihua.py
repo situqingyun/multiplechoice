@@ -8,8 +8,9 @@ from model.modeling_nezha import NeZhaForMultipleChoice
 from model.configuration_nezha import NeZhaConfig
 from transformers import BertForMultipleChoice, BertConfig, BertTokenizer, WEIGHTS_NAME
 from torchblocks.processor import TextClassifierProcessor, InputExample
-from torchblocks.trainer.classifier_trainer import FreelbTrainer, TextClassifierTrainer
+from torchblocks.trainer.classifier_trainer import FreelbTrainer, TextClassifierTrainer, AlumTrainer
 from multiple_choice_processor import MultipleChoiceProcessor
+from torch.utils.data import random_split
 
 import json
 
@@ -97,14 +98,17 @@ MODEL_CLASSES = {
 def main():
     # args = build_argparse().parse_args()
     parser = build_argparse()
-    parser.add_argument('--adv_lr', type=float, default=1e-2)
-    parser.add_argument('--adv_K', type=int, default=3, help="should be at least 1")
-    parser.add_argument('--adv_init_mag', type=float, default=2e-2)
-    parser.add_argument('--adv_norm_type', type=str, default="l2", choices=["l2", "linf"])
-    parser.add_argument('--adv_max_norm', type=float, default=0, help="set to 0 to be unlimited")
-    parser.add_argument('--base_model', default='bert')
+    parser.add_argument('--adv_lr', type=float, default=1e-3)
+    parser.add_argument('--adv_K', type=int, default=1)
+    parser.add_argument('--adv_alpha', default=1.0, type=float)
+    parser.add_argument('--adv_var', default=1e-5, type=float)
+    parser.add_argument('--adv_gamma', default=1e-6, type=float)
+    parser.add_argument('--adv_norm_type', type=str, default="inf", choices=["l2", 'l1', "inf"])
     parser.add_argument('--hidden_dropout_prob', type=float, default=0.1)
     parser.add_argument('--attention_probs_dropout_prob', type=float, default=0)
+
+    parser.add_argument("--do_debug", action="store_true", help="是否是debug模式，debug的时候只使用10条数据")
+
     args = parser.parse_args()
     if args.model_path is None:
         args.model_path = args.model_name
@@ -144,15 +148,25 @@ def main():
     trainer = TextClassifierTrainer(logger=logger, args=args, collate_fn=processor.collate_fn,
                             input_keys=processor.get_input_keys(),
                             metrics=[Accuracy()])
+    # trainer = AlumTrainer(logger=logger, args=args, collate_fn=processor.collate_fn,
+    #                         input_keys=processor.get_input_keys(),
+    #                         metrics=[Accuracy()])
+
     # do train
     if args.do_train:
         train_dataset = processor.create_dataset(args.train_max_seq_length, 'train.json', 'train')
         # eval_dataset = processor.create_dataset(args.eval_max_seq_length, 'dev.csv', 'dev')
+
         threshold = 0.1
         train_size = int(threshold * len(train_dataset))
         val_size = len(train_dataset) - train_size
-        from torch.utils.data import random_split
+
         train_dataset, eval_dataset = random_split(train_dataset, [train_size, val_size])
+
+        if args.do_debug:
+            train_dataset, _ = random_split(train_dataset, [10, len(train_dataset)-10])
+            eval_dataset, _ = random_split(eval_dataset, [10, len(eval_dataset)-10])
+
         trainer.train(model, train_dataset=train_dataset, eval_dataset=eval_dataset)
     # do eval
     checkpoint_numbers = list()
@@ -178,16 +192,20 @@ def main():
         output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
         dict_to_text(output_eval_file, results)
 
-        if len(loss_list) > 3:
-            sorted_loss_list = loss_list.sort()[:3]
+        if len(loss_list) > 1:
+            sorted_loss_list = loss_list.sort()[:1]
             for i, k in enumerate(loss_list):
                 if k in sorted_loss_list:
-                    checkpoint_numbers.append(k)
+                    checkpoint_numbers.append(i)
         else:
             checkpoint_numbers = [i for i in range(len(loss_list))]
     # do predict
     if args.do_predict:
-        test_dataset = processor.create_dataset(args.eval_max_seq_length, 'test.csv', 'test')
+        test_dataset = processor.create_dataset(args.eval_max_seq_length, 'validation.json', 'test')
+
+        if args.do_debug:
+            test_dataset, _ = random_split(test_dataset, [10, len(test_dataset)-10])
+
         if args.checkpoint_number != 0:
             checkpoints = get_checkpoints(args.output_dir, args.checkpoint_number, WEIGHTS_NAME)
         else:
@@ -200,6 +218,8 @@ def main():
             model = model_class.from_pretrained(checkpoint)
             model.to(args.device)
             trainer.predict(model, test_dataset=test_dataset, prefix=str(global_step))
+
+
 
 
 if __name__ == "__main__":
