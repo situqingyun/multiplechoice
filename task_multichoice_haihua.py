@@ -79,7 +79,8 @@ def main():
     parser.add_argument('--hidden_dropout_prob', type=float, default=0.1)
     parser.add_argument('--attention_probs_dropout_prob', type=float, default=0)
 
-    parser.add_argument("--do_debug", action="store_true", help="是否是debug模式，debug的时候只使用10条数据")
+    # 中文存在问题
+    parser.add_argument("--do_debug", action="store_true", help="the do_debug only uses the first 10")
 
     args = parser.parse_args()
     if args.model_path is None:
