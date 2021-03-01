@@ -16,34 +16,6 @@ import json
 
 
 class CommonDataProcessor(MultipleChoiceProcessor):
-    # """Base class for processor converters
-    #    data_dir: 数据目录
-    #    tokenizer: tokenizer
-    #    encode_mode: 预处理方式.
-    #             ``one``: 表示只有一个inputs
-    #             ``pair``: 表示两个inputs，一般针对siamese类型网络
-    #             ``triple``: 表示三个inputs，一般针对triple类型网络
-    #             (default: ``one``)
-    #     add_special_tokens: 是否增加[CLS]XXX[SEP], default: True
-    #     pad_to_max_length: 是否padding到最大长度, default: True
-    #     truncate_label: 是否label进行阶段，主要在collect_fn函数中，一般针对sequence labeling任务中，default: False
-    # """
-    #
-    # def __init__(self, data_dir, tokenizer,
-    #              encode_mode='pair',
-    #              add_special_tokens=True,
-    #              pad_to_max_length=True,
-    #              truncate_label=False,
-    #              truncation_strategy="longest_first",
-    #              prefix='', **kwargs):
-    #
-    #     super(MultipleChoiceProcessor, self).__init__(data_dir, tokenizer,
-    #                                                   encode_mode,
-    #                                                   add_special_tokens,
-    #                                                   pad_to_max_length,
-    #                                                   truncate_label,
-    #                                                   truncation_strategy,
-    #                                                   prefix, **kwargs)
 
     def get_labels(self):
         """See base class."""
@@ -193,7 +165,10 @@ def main():
         dict_to_text(output_eval_file, results)
 
         if len(loss_list) > 1:
-            sorted_loss_list = loss_list.sort()[:1]
+            import copy
+            sorted_loss_list = copy.deepcopy(loss_list)
+            sorted_loss_list.sort()
+            sorted_loss_list = sorted_loss_list[:1]
             for i, k in enumerate(loss_list):
                 if k in sorted_loss_list:
                     checkpoint_numbers.append(i)
