@@ -130,7 +130,7 @@ def main():
         train_dataset = processor.create_dataset(args.train_max_seq_length, 'train.json', 'train')
         # eval_dataset = processor.create_dataset(args.eval_max_seq_length, 'dev.csv', 'dev')
 
-        threshold = 0.1
+        threshold = 0.9
         train_size = int(threshold * len(train_dataset))
         val_size = len(train_dataset) - train_size
 
