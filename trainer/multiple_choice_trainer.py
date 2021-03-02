@@ -3,9 +3,19 @@ from torchblocks.trainer.base import BaseTrainer
 from torchblocks.callback import ProgressBar
 from torchblocks.utils.tensor import tensor_to_cpu
 from torchblocks.callback.adversarial import FreeLB
+import numpy as np
 
 
 class MultipleChoiceTrainer(BaseTrainer):
+
+    def predict(self, model, test_dataset, prefix=''):
+        '''
+        test数据集预测
+        '''
+        test_dataloader = self.build_test_dataloader(test_dataset)
+        self.predict_step(model, test_dataloader, do_eval=False)
+        output_logits_file = f"{self.prefix + prefix}_predict_test_logits.json"
+        self.save_predict_result(file_name=output_logits_file, data=self.records['pred_result'])
 
     '''
     文本分类
@@ -13,6 +23,7 @@ class MultipleChoiceTrainer(BaseTrainer):
     def predict_step(self, model, data_loader, do_eval, **kwargs):
         self.build_record_object()
         pbar = ProgressBar(n_total=len(data_loader), desc='Evaluating' if do_eval else 'Predicting')
+        self.records['pred_result'] = list()
         for step, batch in enumerate(data_loader):
             model.eval()
             inputs = self.build_inputs(batch)
@@ -30,6 +41,9 @@ class MultipleChoiceTrainer(BaseTrainer):
                 else:
                     logits = outputs[0]
             self.records['preds'].append(tensor_to_cpu(logits))
+            logits = tensor_to_cpu(logits).numpy()
+            flat_predictions = np.argmax(logits, axis=1).flatten().tolist()
+            self.records['pred_result'].append(flat_predictions)
             pbar(step)
         self.records['preds'] = torch.cat(self.records['preds'], dim=0)
         if do_eval:

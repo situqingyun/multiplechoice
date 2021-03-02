@@ -5,7 +5,7 @@ import json
 
 
 def prepare_result(predict_result_file, test_file):
-    with open(predict_result_file, 'r') as f:
+    with open(predict_result_file, 'rb') as f:
         predict_data = pickle.load(f)
 
     with open(test_file, 'r') as f:
@@ -34,10 +34,10 @@ def prepare_result(predict_result_file, test_file):
 
     sub.sort_values('id', inplace=True)
     sub['id'] = sub['id'].apply(convert_id)
-    sub.to_csv('/content/drive/MyDrive/drive/haihua/output/sub.csv', index=False)
+    sub.to_csv('outputs/haihua_output/sub.csv', index=False)
     print('Everything Done !!')
 
 
 if __name__ == '__main__':
-    prepare_result('', 'dataset/haihua/validation.json')
+    prepare_result('outputs/haihua_output/bert-base-uncased/chinese-bert-wwm_haihua11112_predict_test_logits.pkl', 'dataset/haihua/validation.json')
 

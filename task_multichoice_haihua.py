@@ -9,6 +9,7 @@ from model.configuration_nezha import NeZhaConfig
 from transformers import BertForMultipleChoice, BertConfig, BertTokenizer, WEIGHTS_NAME
 from torchblocks.processor import TextClassifierProcessor, InputExample
 from torchblocks.trainer.classifier_trainer import FreelbTrainer, TextClassifierTrainer, AlumTrainer
+from trainer.multiple_choice_trainer import MultipleChoiceTrainer
 from multiple_choice_processor import MultipleChoiceProcessor
 from torch.utils.data import random_split
 
@@ -160,7 +161,8 @@ def main():
                 result = {"{}_{}".format(global_step, k): v for k, v in trainer.records['result'].items()}
                 results.update(result)
             # 筛选出最好的三个
-            loss_list.append(trainer.records['result']['eval_loss'])
+            print('eval_acc: ', checkpoint, trainer.records['result']['eval_acc'])
+            loss_list.append(trainer.records['result']['eval_acc'])
 
         output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
         dict_to_text(output_eval_file, results)
@@ -168,13 +170,16 @@ def main():
         if len(loss_list) > 1:
             import copy
             sorted_loss_list = copy.deepcopy(loss_list)
-            sorted_loss_list.sort()
+            sorted_loss_list.sort(reverse=True)
             sorted_loss_list = sorted_loss_list[:1]
             for i, k in enumerate(loss_list):
                 if k in sorted_loss_list:
-                    checkpoint_numbers.append(i)
+                    print('-' * 20)
+                    print('best one:', checkpoints[i])
+                    print('-' * 20)
+                    checkpoint_numbers.append(checkpoints[i])
         else:
-            checkpoint_numbers = [i for i in range(len(loss_list))]
+            checkpoint_numbers = [i for i in checkpoints]
     # do predict
     if args.do_predict:
         test_dataset = processor.create_dataset(args.eval_max_seq_length, 'validation.json', 'test')
@@ -185,9 +190,9 @@ def main():
         if args.checkpoint_number != 0:
             checkpoints = get_checkpoints(args.output_dir, args.checkpoint_number, WEIGHTS_NAME)
         else:
-            checkpoints = list()
-            for i in checkpoint_numbers:
-                checkpoints.extend(get_checkpoints(args.output_dir, i, WEIGHTS_NAME))
+            checkpoints = checkpoint_numbers
+            # for i in checkpoint_numbers:
+            #     checkpoints.extend(get_checkpoints(args.output_dir, i, WEIGHTS_NAME))
 
         for checkpoint in checkpoints:
             global_step = checkpoint.split("/")[-1].split("-")[-1]
