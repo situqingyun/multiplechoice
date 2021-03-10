@@ -39,5 +39,5 @@ def prepare_result(predict_result_file, test_file):
 
 
 if __name__ == '__main__':
-    prepare_result('outputs/haihua_output/bert-base-uncased/chinese-bert-wwm_haihua11112_predict_test_logits.pkl', 'dataset/haihua/validation.json')
+    prepare_result('outputs/haihua_output/bert-base-uncased/nezha-cn-base_haihua8334_predict_test_logits.pkl', 'dataset/haihua/validation.json')
 

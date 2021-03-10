@@ -1,5 +1,4 @@
 import os
-import csv
 from torchblocks.metrics.classification import Accuracy
 from torchblocks.callback import TrainLogger
 from torchblocks.utils import seed_everything, dict_to_text, build_argparse
@@ -7,11 +6,12 @@ from torchblocks.utils import prepare_device, get_checkpoints
 from model.modeling_nezha import NeZhaForMultipleChoice
 from model.configuration_nezha import NeZhaConfig
 from transformers import BertForMultipleChoice, BertConfig, BertTokenizer, WEIGHTS_NAME
-from torchblocks.processor import TextClassifierProcessor, InputExample
-from torchblocks.trainer.classifier_trainer import FreelbTrainer, TextClassifierTrainer, AlumTrainer
-from trainer.multiple_choice_trainer import MultipleChoiceTrainer
-from multiple_choice_processor import MultipleChoiceProcessor
+from transformers import XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer
+from torchblocks.processor import InputExample
+from torchblocks.trainer.classifier_trainer import TextClassifierTrainer
+from processor.multiple_choice_processor import MultipleChoiceProcessor
 from torch.utils.data import random_split
+
 
 import json
 
@@ -64,7 +64,8 @@ class CommonDataProcessor(MultipleChoiceProcessor):
 
 MODEL_CLASSES = {
     'nezha': (NeZhaConfig, NeZhaForMultipleChoice, BertTokenizer),
-    'bert': (BertConfig, BertForMultipleChoice, BertTokenizer)
+    'bert': (BertConfig, BertForMultipleChoice, BertTokenizer),
+    'xlnet': (XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer)
 }
 
 
@@ -104,6 +105,7 @@ def main():
 
     # data processor
     logger.info("initializing data processor")
+    # AutoModel.from_pretrained('bert-base-uncased', mirror='tuna')
     tokenizer = tokenizer_class.from_pretrained(args.model_path, do_lower_case=args.do_lower_case)
     processor = CommonDataProcessor(data_dir=args.data_dir, tokenizer=tokenizer, prefix=prefix)
     label_list = processor.get_labels()
