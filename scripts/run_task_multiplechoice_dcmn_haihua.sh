@@ -8,7 +8,7 @@ export TASK_NAME=haihua
 export MODEL_TYPE=nezha
 
 #-----------training-----------------
-python task_multichoice_haihua.py \
+python task_multichoice_haihua_dcmn.py \
   --model_type=$MODEL_TYPE \
   --model_path=$MODEL_DIR \
   --task_name=$TASK_NAME \
