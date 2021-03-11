@@ -135,9 +135,9 @@ def main():
 
         threshold = 0.9
         train_size = int(threshold * len(train_dataset))
-        val_size = len(train_dataset) - train_size
+        eval_size = len(train_dataset) - train_size
 
-        train_dataset, eval_dataset = random_split(train_dataset, [train_size, val_size])
+        train_dataset, eval_dataset = random_split(train_dataset, [train_size, eval_size])
 
         if args.do_debug:
             train_dataset, _ = random_split(train_dataset, [2, len(train_dataset)-2])
