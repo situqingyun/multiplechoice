@@ -12,6 +12,8 @@ from torchblocks.optims.lr_scheduler import get_linear_schedule_with_warmup
 from torchblocks.utils.paths import save_pickle, json_to_text
 from torchblocks.utils.tools import seed_everything, AverageMeter, to_json_string
 from torchblocks.callback import ModelCheckpoint, EarlyStopping, ProgressBar, TrainLogger, EMA
+from torchblocks.utils.tensor import tensor_to_cpu
+
 import torch_xla
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.xla_multiprocessing as xmp
@@ -28,7 +30,7 @@ def build_train_dataloader(self, train_dataset):
     # sampler = RandomSampler(train_dataset) if self.args.local_rank == -1 else DistributedSampler(train_dataset)
     sampler = DistributedSampler(
         train_dataset,
-        num_replicas=self.args.n_gpu,
+        num_replicas=xm.xrt_world_size(),
         rank=xm.get_ordinal(),
         shuffle=True
     )
@@ -47,7 +49,7 @@ def build_eval_dataloader(self, eval_dataset):
     # sampler = SequentialSampler(eval_dataset) if self.args.local_rank == -1 else DistributedSampler(eval_dataset)
     sampler = DistributedSampler(
         eval_dataset,
-        num_replicas=self.args.n_gpu,
+        num_replicas=xm.xrt_world_size(),
         rank=xm.get_ordinal(),
         shuffle=False
     )
@@ -66,7 +68,7 @@ def build_test_dataloader(self, test_dataset):
     # sampler = SequentialSampler(test_dataset) if self.args.local_rank == -1 else DistributedSampler(test_dataset)
     sampler = DistributedSampler(
         test_dataset,
-        num_replicas=self.args.n_gpu,
+        num_replicas=xm.xrt_world_size(),
         rank=xm.get_ordinal(),
         shuffle=False
     )
@@ -99,7 +101,7 @@ def train(self, model, train_dataset, eval_dataset):
         self.args.save_steps = len(train_dataloader)
     for epoch in range(0, int(self.args.num_train_epochs)):
         self.build_record_object()
-        train_dataloader = pl.ParallelLoader(train_dataloader, [args.device]).per_device_loader(args.device)
+        train_dataloader = pl.ParallelLoader(train_dataloader, [self.args.device]).per_device_loader(self.args.device)
         pbar = ProgressBar(n_total=len(train_dataloader), desc='Training')
         for step, batch in enumerate(train_dataloader):
             loss = self.train_step(model, batch, optimizer)
@@ -149,7 +151,7 @@ def train(self, model, train_dataset, eval_dataset):
 
 def predict_step(self, model, data_loader, do_eval, **kwargs):
     self.build_record_object()
-    data_loader = pl.ParallelLoader(data_loader, [args.device]).per_device_loader(args.device)
+    data_loader = pl.ParallelLoader(data_loader, [self.args.device]).per_device_loader(self.args.device)
     pbar = ProgressBar(n_total=len(data_loader), desc='Evaluating' if do_eval else 'Predicting')
     for step, batch in enumerate(data_loader):
         model.eval()
