@@ -12,6 +12,7 @@ from torchblocks.trainer.classifier_trainer import TextClassifierTrainer
 from processor.multiple_choice_processor import DCMNMultipleChoiceProcessor
 from torch.utils.data import random_split
 from model.modeling_bert import BertForMultipleChoiceWithMatch
+import torch
 
 import json
 
@@ -70,7 +71,7 @@ MODEL_CLASSES = {
 }
 
 
-def tpu_run(args, logger):
+def tpu_run(index, args, logger, config_class, model_class, processor, train_dataset, eval_dataset, test_dataset):
     import torch_xla
     import torch_xla.core.xla_model as xm
     import torch_xla.distributed.xla_multiprocessing as xmp
@@ -87,6 +88,27 @@ def tpu_run(args, logger):
     # downloaded once (c/o the master process). It also makes
     # sure that the other processes don't attempt to load the
     # weights when downloading isn't finished yet.
+    if not xm.is_master_ordinal():
+        xm.rendezvous('download_only_once')
+
+    seed_everything(args.seed)
+
+    # # data processor
+    # logger.info("initializing data processor")
+    # # AutoModel.from_pretrained('bert-base-uncased', mirror='tuna')
+    # tokenizer = tokenizer_class.from_pretrained(args.model_path, do_lower_case=args.do_lower_case)
+    # processor = CommonDataProcessor(data_dir=args.data_dir, tokenizer=tokenizer, prefix=prefix)
+    # label_list = processor.get_labels()
+    # num_labels = len(label_list)
+    # args.num_labels = num_labels
+
+    # model
+    logger.info("initializing model and config")
+    config = config_class.from_pretrained(args.model_path, num_labels=args.num_labels,
+                                          cache_dir=args.cache_dir if args.cache_dir else None)
+    model = model_class.from_pretrained(args.model_path, config=config)
+    model.to(args.device)
+
     if not xm.is_master_ordinal():
         xm.rendezvous('download_only_once')
 
@@ -119,18 +141,18 @@ def tpu_run(args, logger):
 
     # do train
     if args.do_train:
-        train_dataset = processor.create_dataset(args.train_max_seq_length, 'train.json', 'train')
-        # eval_dataset = processor.create_dataset(args.eval_max_seq_length, 'dev.csv', 'dev')
-
-        threshold = 0.9
-        train_size = int(threshold * len(train_dataset))
-        val_size = len(train_dataset) - train_size
-
-        train_dataset, eval_dataset = random_split(train_dataset, [train_size, val_size])
-
-        if args.do_debug:
-            train_dataset, _ = random_split(train_dataset, [2, len(train_dataset) - 2])
-            eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset) - 2])
+        # train_dataset = processor.create_dataset(args.train_max_seq_length, 'train.json', 'train')
+        # # eval_dataset = processor.create_dataset(args.eval_max_seq_length, 'dev.csv', 'dev')
+        #
+        # threshold = 0.9
+        # train_size = int(threshold * len(train_dataset))
+        # val_size = len(train_dataset) - train_size
+        #
+        # train_dataset, eval_dataset = random_split(train_dataset, [train_size, val_size])
+        #
+        # if args.do_debug:
+        #     train_dataset, _ = random_split(train_dataset, [2, len(train_dataset) - 2])
+        #     eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset) - 2])
 
         trainer.train(model, train_dataset=train_dataset, eval_dataset=eval_dataset)
     # do eval
@@ -173,10 +195,10 @@ def tpu_run(args, logger):
             checkpoint_numbers = [i for i in checkpoints]
     # do predict
     if args.do_predict:
-        test_dataset = processor.create_dataset(args.eval_max_seq_length, 'validation.json', 'test')
-
-        if args.do_debug:
-            test_dataset, _ = random_split(test_dataset, [2, len(test_dataset) - 2])
+        # test_dataset = processor.create_dataset(args.eval_max_seq_length, 'validation.json', 'test')
+        #
+        # if args.do_debug:
+        #     test_dataset, _ = random_split(test_dataset, [2, len(test_dataset) - 2])
 
         if args.checkpoint_number != 0:
             checkpoints = get_checkpoints(args.output_dir, args.checkpoint_number, WEIGHTS_NAME)
@@ -192,7 +214,7 @@ def tpu_run(args, logger):
             trainer.predict(model, test_dataset=test_dataset, prefix=str(global_step))
 
 
-def common_run(args, logger):
+def common_run(args, logger, prefix):
     # device
     logger.info("initializing device")
     args.device, args.n_gpu = prepare_device(args.gpu, args.local_rank)
@@ -328,11 +350,55 @@ def main():
     prefix = "_".join([args.model_name, args.task_name])
     logger = TrainLogger(log_dir=args.output_dir, prefix=prefix)
 
+    args.model_type = args.model_type.lower()
+    config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
+
+    logger.info("initializing data processor")
+    tokenizer = tokenizer_class.from_pretrained(args.model_path, do_lower_case=args.do_lower_case)
+    processor = CommonDataProcessor(data_dir=args.data_dir, tokenizer=tokenizer, prefix=prefix)
+    label_list = processor.get_labels()
+    num_labels = len(label_list)
+    args.num_labels = num_labels
+
+    # do train
+    if args.do_train:
+        train_dataset = processor.create_dataset(args.train_max_seq_length, 'train.json', 'train')
+        # eval_dataset = processor.create_dataset(args.eval_max_seq_length, 'dev.csv', 'dev')
+
+        threshold = 0.9
+        train_size = int(threshold * len(train_dataset))
+        val_size = len(train_dataset) - train_size
+
+        train_dataset, eval_dataset = random_split(train_dataset, [train_size, val_size])
+
+        if args.do_debug:
+            train_dataset, _ = random_split(train_dataset, [2, len(train_dataset) - 2])
+            eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset) - 2])
+
+    # if args.do_eval and args.local_rank in [-1, 0]:
+
+    # do predict
+    if args.do_predict:
+        test_dataset = processor.create_dataset(args.eval_max_seq_length, 'validation.json', 'test')
+
+        if args.do_debug:
+            test_dataset, _ = random_split(test_dataset, [2, len(test_dataset) - 2])
+
     # tpu
     if args.use_tpu:
-        xmp.spawn(tpu_run, args=(args, logger), nprocs=args.n_gpu, start_method='fork')
+        import torch_xla
+        import torch_xla.core.xla_model as xm
+        import torch_xla.distributed.xla_multiprocessing as xmp
+        import torch_xla.distributed.parallel_loader as pl
+        args.n_gpu = xm.xrt_world_size()
+        xmp.spawn(tpu_run,
+                  args=(args, logger, config_class, model_class, processor, train_dataset, eval_dataset, test_dataset),
+                  nprocs=args.n_gpu, start_method='fork')
+
+        # def tpu_run(index, args, logger, config_class, model_class, processor, train_dataset, eval_dataset,
+        #             test_dataset):
     else:
-        common_run(args, logger)
+        common_run(args, logger, prefix)
 
 
 if __name__ == "__main__":

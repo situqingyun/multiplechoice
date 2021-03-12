@@ -12,6 +12,10 @@ from torchblocks.optims.lr_scheduler import get_linear_schedule_with_warmup
 from torchblocks.utils.paths import save_pickle, json_to_text
 from torchblocks.utils.tools import seed_everything, AverageMeter, to_json_string
 from torchblocks.callback import ModelCheckpoint, EarlyStopping, ProgressBar, TrainLogger, EMA
+import torch_xla
+import torch_xla.core.xla_model as xm
+import torch_xla.distributed.xla_multiprocessing as xmp
+import torch_xla.distributed.parallel_loader as pl
 
 
 def build_train_dataloader(self, train_dataset):
