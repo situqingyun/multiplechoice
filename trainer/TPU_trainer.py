@@ -94,7 +94,7 @@ def train(self, model, train_dataset, eval_dataset):
     if self.args.do_ema:
         ema = EMA(model, decay=self.args.ema_decay)
     seed_everything(self.args.seed)  # Added here for reproductibility (even between python 2 and 3)
-    print('Start training.')
+    xm.master_print('Start training.')
     if self.args.logging_steps < 0:
         self.args.logging_steps = len(train_dataloader)
     if self.args.save_steps < 0:
@@ -174,3 +174,6 @@ def predict_step(self, model, data_loader, do_eval, **kwargs):
     self.records['preds'] = torch.cat(self.records['preds'], dim=0)
     if do_eval:
         self.records['target'] = torch.cat(self.records['target'], dim=0)
+
+
+print()

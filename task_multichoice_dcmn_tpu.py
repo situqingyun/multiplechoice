@@ -390,11 +390,11 @@ def main():
         import torch_xla.core.xla_model as xm
         import torch_xla.distributed.xla_multiprocessing as xmp
         import torch_xla.distributed.parallel_loader as pl
-        args.n_gpu = xm.xrt_world_size()
+        devices = xm.get_xla_supported_devices()
+        args.n_gpu = len(devices)
         xmp.spawn(tpu_run,
                   args=(args, logger, config_class, model_class, processor, train_dataset, eval_dataset, test_dataset),
                   nprocs=args.n_gpu, start_method='fork')
-
         # def tpu_run(index, args, logger, config_class, model_class, processor, train_dataset, eval_dataset,
         #             test_dataset):
     else:
