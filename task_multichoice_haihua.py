@@ -7,6 +7,7 @@ from model.modeling_nezha import NeZhaForMultipleChoice
 from model.configuration_nezha import NeZhaConfig
 from transformers import BertForMultipleChoice, BertConfig, BertTokenizer, WEIGHTS_NAME
 from transformers import XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer
+from transformers import LongformerForMultipleChoice, LongformerConfig, LongformerTokenizer
 from torchblocks.processor import InputExample
 from torchblocks.trainer.classifier_trainer import TextClassifierTrainer
 from processor.multiple_choice_processor import MultipleChoiceProcessor
@@ -61,11 +62,19 @@ class CommonDataProcessor(MultipleChoiceProcessor):
 
         return examples
 
-
+# models = [
+#     ('bert', 'hfl/chinese-roberta-wwm-ext'),
+#     ('xlnet', 'hfl/chinese-xlnet-base'),
+#     ('bert', 'schen/longformer-chinese-base-4096'),
+#     ('bert', 'voidful/albert_chinese_base'),
+#     ('bert', 'clue/roberta_chinese_base'),
+#     ('electra', 'hfl/chinese-electra-base-discriminator'),
+# ]
 MODEL_CLASSES = {
     'nezha': (NeZhaConfig, NeZhaForMultipleChoice, BertTokenizer),
     'bert': (BertConfig, BertForMultipleChoice, BertTokenizer),
-    'xlnet': (XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer)
+    'xlnet': (XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer),
+    'longformer': (LongformerConfig, LongformerForMultipleChoice, LongformerTokenizer)
 }
 
 

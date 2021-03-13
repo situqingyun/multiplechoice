@@ -1385,7 +1385,8 @@ class NeZhaForMultipleChoiceWithMatch(NeZhaPreTrainedModel):
         flat_attention_mask = attention_mask.view(-1, attention_mask.size(-1))
 
         outputs = self.bert(flat_input_ids, flat_token_type_ids, flat_attention_mask)
-        sequence_output = outputs.last_hidden_state
+        # sequence_output = outputs.last_hidden_state
+        sequence_output = outputs[0]
 
         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
             sequence_output, doc_len, ques_len, option_len)
@@ -1424,7 +1425,7 @@ class NeZhaForMultipleChoiceWithMatch(NeZhaPreTrainedModel):
 
         return MultipleChoiceModelOutput(
             loss=match_loss,
-            logits=match_reshaped_logits,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
+            logits=match_reshaped_logits
+            # hidden_states=outputs.hidden_states,
+            # attentions=outputs.attentions,
         )
