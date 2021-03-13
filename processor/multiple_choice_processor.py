@@ -180,16 +180,40 @@ class DCMNMultipleChoiceProcessor(DataProcessor):
         # that's truncated likely contains more information than a longer sequence.
         pop_label = True
         while True:
-            total_length = len(context_token) + len(ques_token)+len(option_token)
-            mean_length = total_length//3
+            total_length = len(context_token) + len(ques_token) + len(option_token)
+            mean_length = total_length // 3
             if total_length <= max_length:
                 break
-            if len(context_token)>mean_length:
-                context_token.pop(1)
-            elif len(ques_token)>mean_length:
-                ques_token.pop(1)
+            if len(context_token) > mean_length:
+                context_token.pop(0)
+            elif len(ques_token) > mean_length:
+                ques_token.pop(0)
             else:
-                option_token.pop(1)
+                option_token.pop(0)
+            # if len(tokens_a) > len(tokens_b):
+            #     tokens_a.pop(1)
+            # else:
+            #     tokens_b.pop(1)
+
+    def _truncate_seq_pair_remove_context(self, context_token, ques_token, option_token, max_length):
+        """Truncates a sequence pair in place to the maximum length."""
+
+        # This is a simple heuristic which will always truncate the longer sequence
+        # one token at a time. This makes more sense than truncating an equal percent
+        # of tokens from each, since if one sequence is very short then each token
+        # that's truncated likely contains more information than a longer sequence.
+        pop_label = True
+        while True:
+            total_length = len(context_token) + len(ques_token) + len(option_token)
+            # mean_length = total_length // 3
+            if total_length <= max_length:
+                break
+            if len(context_token) > 0:
+                context_token.pop(0)
+            elif len(ques_token) > 0:
+                ques_token.pop(0)
+            else:
+                option_token.pop(0)
             # if len(tokens_a) > len(tokens_b):
             #     tokens_a.pop(1)
             # else:
@@ -209,8 +233,8 @@ class DCMNMultipleChoiceProcessor(DataProcessor):
         # todo 缺省的选项如何填充
         # 这里使用了tokenizer，tokenize，参考下dissertation
         ending_token = self.tokenizer.tokenize(ending)
-        option_len = len(ending_token)
-        ques_len = len(start_ending_tokens)
+        # option_len = len(ending_token)
+        # ques_len = len(start_ending_tokens)
 
         # ending_tokens = start_ending_tokens + ending_token
 
@@ -221,7 +245,10 @@ class DCMNMultipleChoiceProcessor(DataProcessor):
         # ending_tokens = start_ending_tokens + ending_tokens
         # self._truncate_seq_pair(context_tokens_choice, ending_tokens, max_seq_length - 3)
 
-        self._truncate_seq_pair(context_tokens_choice, start_ending_tokens, ending_token, max_seq_length - 3)
+        # self._truncate_seq_pair(context_tokens_choice, start_ending_tokens, ending_token, max_seq_length - 3)
+        self._truncate_seq_pair_remove_context(context_tokens_choice, start_ending_tokens, ending_token,
+                                               max_seq_length - 3)
+
         ending_tokens = start_ending_tokens + ending_token  # ending_tokens: question+option    ending_token: option
 
         doc_len = len(context_tokens_choice)
