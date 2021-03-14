@@ -13,6 +13,7 @@ python task_multichoice_haihua.py \
   --model_path=$MODEL_DIR \
   --task_name=$TASK_NAME \
   --do_train \
+  --do_eval \
   --do_predict \
   --gpu=0 \
   --adv_K=3 \

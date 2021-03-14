@@ -153,37 +153,104 @@ class BertForMultipleChoiceWithMatch(BertPreTrainedModel):
             attentions=outputs.attentions,
         )
 
+class MeanPooler(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.activation = nn.Tanh()
+
+    def forward(self, hidden_states):
+        # We "pool" the model by simply taking the hidden state corresponding
+        # to the first token.
+        first_token_tensor = hidden_states
+        pooled_output = self.dense(first_token_tensor)
+        pooled_output = self.activation(pooled_output)
+        return pooled_output
+
+
+# # DUMA
+# class DUMA(nn.Module):
+#     def __init__(self, config):
+#         super(DUMA, self).__init__()
+#         # self.map_linear = nn.Linear(2 * config.hidden_size, 2 * config.hidden_size)
+#         # self.trans_linear = nn.Linear(config.hidden_size, config.hidden_size)
+#         # self.drop_module = nn.Dropout(2 * config.hidden_dropout_prob)
+#         # self.rank_module = nn.Linear(config.hidden_size * 2, 1)
+#         self.doc_anttion = BertSelfAttention(config)
+#         self.ques_opt_anttion = BertSelfAttention(config)
+#         self.outputlayer = BertSelfOutput(config)
+#
+#         self.pooler = BertPooler(config)
+#         # self.fuse = nn.Linear()
+#
+#     def forward(self, doc_seq_output, ques_option_seq_output ):
+#         # proj_p, proj_q, seq_len = inputs
+#         # trans_q = self.trans_linear(proj_q)
+#         # att_weights = proj_p.bmm(torch.transpose(trans_q, 1, 2))
+#         # att_norm = masked_softmax(att_weights, seq_len)
+#         #
+#         # att_vec = att_norm.bmm(proj_q)
+#         # output = nn.ReLU()(self.trans_linear(att_vec))
+#
+#         doc_encoder = self.doc_anttion(doc_seq_output, encoder_hidden_states=ques_option_seq_output)
+#         ques_option_encoder = self.ques_opt_anttion(ques_option_seq_output, encoder_hidden_states=doc_seq_output)
+#         # fuse: summarize
+#         # output = doc_encoder+ques_option_encoder
+#         # output = torch.add(doc_encoder, ques_option_encoder)
+#         output = self.outputlayer(doc_encoder[0], ques_option_encoder[0])
+#
+#         output = self.pooler(output)
+#         return output
+
+# # DUMA
+# class DUMA(nn.Module):
+#     def __init__(self, config):
+#         super(DUMA, self).__init__()
+#         self.doc_anttion = BertSelfAttention(config)
+#         self.ques_opt_anttion = BertSelfAttention(config)
+#         self.outputlayer = BertSelfOutput(config)
+#
+#         self.doc_pooler = BertPooler(config)
+#         self.ques_opt_pooler = BertPooler(config)
+#
+#     def forward(self, sequence_output, doc_len, ques_len, option_len):
+#         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
+#             sequence_output, doc_len, ques_len, option_len)
+#         doc_encoder = self.doc_anttion(doc_seq_output, encoder_hidden_states=ques_option_seq_output)
+#         ques_option_encoder = self.ques_opt_anttion(ques_option_seq_output, encoder_hidden_states=doc_seq_output)
+#         # fuse: summarize
+#         # output = doc_encoder+ques_option_encoder
+#         # output = torch.add(doc_encoder, ques_option_encoder)
+#
+#         doc_pooled_output = self.doc_pooler(doc_encoder[0])
+#         ques_option_pooled_output = self.ques_opt_pooler(ques_option_encoder[0])
+#
+#         output = self.outputlayer(doc_pooled_output, ques_option_pooled_output)
+#
+#         output = self.pooler(output)
+#         return output
 
 # DUMA
 class DUMA(nn.Module):
     def __init__(self, config):
         super(DUMA, self).__init__()
-        # self.map_linear = nn.Linear(2 * config.hidden_size, 2 * config.hidden_size)
-        # self.trans_linear = nn.Linear(config.hidden_size, config.hidden_size)
-        # self.drop_module = nn.Dropout(2 * config.hidden_dropout_prob)
-        # self.rank_module = nn.Linear(config.hidden_size * 2, 1)
-        self.doc_anttion = BertSelfAttention(config)
-        self.ques_opt_anttion = BertSelfAttention(config)
+        self.attention = BertSelfAttention(config)
+        self.pooler = MeanPooler(config)
         self.outputlayer = BertSelfOutput(config)
 
-        self.pooler = BertPooler(config)
-        # self.fuse = nn.Linear()
-
-    def forward(self, doc_seq_output, ques_option_seq_output ):
-        # proj_p, proj_q, seq_len = inputs
-        # trans_q = self.trans_linear(proj_q)
-        # att_weights = proj_p.bmm(torch.transpose(trans_q, 1, 2))
-        # att_norm = masked_softmax(att_weights, seq_len)
-        #
-        # att_vec = att_norm.bmm(proj_q)
-        # output = nn.ReLU()(self.trans_linear(att_vec))
-
-        doc_encoder = self.doc_anttion(doc_seq_output, encoder_hidden_states=ques_option_seq_output)
-        ques_option_encoder = self.ques_opt_anttion(ques_option_seq_output, encoder_hidden_states=doc_seq_output)
+    def forward(self, sequence_output, doc_len, ques_len, option_len):
+        doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
+            sequence_output, doc_len, ques_len, option_len)
+        doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output)
+        ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output)
         # fuse: summarize
         # output = doc_encoder+ques_option_encoder
         # output = torch.add(doc_encoder, ques_option_encoder)
-        output = self.outputlayer(doc_encoder[0], ques_option_encoder[0])
+
+        doc_pooled_output = self.pooler(doc_encoder[0])
+        ques_option_pooled_output = self.pooler(ques_option_encoder[0])
+
+        output = self.outputlayer(doc_pooled_output, ques_option_pooled_output)
 
         output = self.pooler(output)
         return output
@@ -195,18 +262,9 @@ class BertForMultipleChoiceWithDUMA(BertPreTrainedModel):
         self.num_choices = num_choices
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.dumna = DUMA(config)
-        self.classifier = nn.Linear(config.hidden_size, 1)
-        self.classifier2 = nn.Linear(2 * config.hidden_size, 1)
-        self.classifier3 = nn.Linear(3 * config.hidden_size, 1)
-        self.classifier4 = nn.Linear(4 * config.hidden_size, 1)
-        self.classifier6 = nn.Linear(6 * config.hidden_size, 1)
-        # self.ssmatch = SSingleMatchNet(config)
-        # self.pooler = BertPooler(config)
-        # self.fuse = FuseNet(config)
-        # self.apply(self.init_bert_weights)
-
         self.duma = DUMA(config)
+        self.pooler = self.bert.pooler
+        self.classifier = nn.Linear(config.hidden_size, 1)
         self.init_weights()
 
     def forward(self, input_ids=None, token_type_ids=None, attention_mask=None, doc_len=None, ques_len=None,
@@ -231,36 +289,14 @@ class BertForMultipleChoiceWithDUMA(BertPreTrainedModel):
         outputs = self.bert(flat_input_ids, flat_token_type_ids, flat_attention_mask)
         sequence_output = outputs.last_hidden_state
 
-        doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
-            sequence_output, doc_len, ques_len, option_len)
-
-        # pa_output = self.ssmatch([doc_seq_output, option_seq_output, option_len + 1])
-        # ap_output = self.ssmatch([option_seq_output, doc_seq_output, doc_len + 1])
-        # pq_output = self.ssmatch([doc_seq_output, ques_seq_output, ques_len + 1])
-        # qp_output = self.ssmatch([ques_seq_output, doc_seq_output, doc_len + 1])
-        # qa_output = self.ssmatch([ques_seq_output, option_seq_output, option_len + 1])
-        # aq_output = self.ssmatch([option_seq_output, ques_seq_output, ques_len + 1])
+        # doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
+        #     sequence_output, doc_len, ques_len, option_len)
         #
-        # pa_output_pool, _ = pa_output.max(1)
-        # ap_output_pool, _ = ap_output.max(1)
-        # pq_output_pool, _ = pq_output.max(1)
-        # qp_output_pool, _ = qp_output.max(1)
-        # qa_output_pool, _ = qa_output.max(1)
-        # aq_output_pool, _ = aq_output.max(1)
-        #
-        # pa_fuse = self.fuse([pa_output_pool, ap_output_pool])
-        # pq_fuse = self.fuse([pq_output_pool, qp_output_pool])
-        # qa_fuse = self.fuse([qa_output_pool, aq_output_pool])
-        #
-        # cat_pool = torch.cat([pa_fuse, pq_fuse, qa_fuse], 1)
-
-        duma = self.duma(doc_seq_output, ques_option_seq_output)
-        # output_pool = self.dropout(duma)
-        # match_logits = self.classifier3(output_pool)
-        # match_reshaped_logits = match_logits.view(-1, num_choices)
-
-
-        pooled_output = self.dropout(duma)
+        # duma = self.duma(doc_seq_output, ques_option_seq_output)
+        duma = self.duma(sequence_output, doc_len, ques_len, option_len)
+        duma = self.duma(duma, doc_len, ques_len, option_len)
+        pooled_output = self.pooler(duma)
+        pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
 
