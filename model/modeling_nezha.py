@@ -22,6 +22,7 @@ from transformers.models.bert.modeling_bert import (
     BERT_INPUTS_DOCSTRING,
     MultipleChoiceModelOutput
 )
+from .modeling_util import concat_all_encoders_hidden_states
 
 from torchblocks.losses import FocalLoss
 
@@ -65,7 +66,7 @@ def load_tf_weights_in_nezha(model, config, tf_checkpoint_path):
         # which are not required for using pretrained model
         if any(
                 n in ["adam_v", "adam_m", "lamb_m", "lamb_v", "AdamWeightDecayOptimizer", "AdamWeightDecayOptimizer_1",
-                      "global_step","good_steps", "loss_scale", 'bad_steps']
+                      "global_step", "good_steps", "loss_scale", 'bad_steps']
                 for n in name
         ):
             logger.info("Skipping {}".format("/".join(name)))
@@ -113,6 +114,7 @@ class NeZhaEmbeddings(nn.Module):
     """
     Construct the embeddings from word, position and token_type embeddings.
     """
+
     def __init__(self, config):
         super().__init__()
         self.use_relative_position = config.use_relative_position
@@ -411,6 +413,7 @@ class NeZhaPreTrainedModel(PreTrainedModel):
             module.weight.data.fill_(1.0)
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
+
 
 @add_start_docstrings(
     "The bare Bert Model transformer outputting raw hidden-states without any specific head on top.",
@@ -1279,6 +1282,7 @@ class NeZhaForQuestionAnswering(NeZhaPreTrainedModel):
 
         return outputs  # (loss), start_logits, end_logits, (hidden_states), (attentions)
 
+
 # dcmn
 def masked_softmax(vector, seq_lens):
     mask = vector.new(vector.size()).zero_()
@@ -1432,6 +1436,7 @@ class NeZhaForMultipleChoiceWithMatch(NeZhaPreTrainedModel):
             # attentions=outputs.attentions,
         )
 
+
 class MeanPooler(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -1446,13 +1451,15 @@ class MeanPooler(nn.Module):
         pooled_output = self.activation(pooled_output)
         return pooled_output
 
-#Mean Pooling - Take attention mask into account for correct averaging
+
+# Mean Pooling - Take attention mask into account for correct averaging
 def mean_pooling(model_output, attention_mask):
-    token_embeddings = model_output[0] #First element of model_output contains all token embeddings
+    token_embeddings = model_output[0]  # First element of model_output contains all token embeddings
     input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
     sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
     sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
     return sum_embeddings / sum_mask
+
 
 # # DUMA
 # class DUMA(nn.Module):
@@ -1609,3 +1616,74 @@ class NeZhaForMultipleChoiceWithFocalLoss(NeZhaPreTrainedModel):
             outputs = (loss,) + outputs
 
         return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
+
+
+def fusion_forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        encoder_hidden_states=None,
+        encoder_attention_mask=None,
+):
+    if input_ids is not None and inputs_embeds is not None:
+        raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
+    elif input_ids is not None:
+        input_shape = input_ids.size()
+    elif inputs_embeds is not None:
+        input_shape = inputs_embeds.size()[:-1]
+    else:
+        raise ValueError("You have to specify either input_ids or inputs_embeds")
+
+    device = input_ids.device if input_ids is not None else inputs_embeds.device
+
+    if attention_mask is None:
+        attention_mask = torch.ones(input_shape, device=device)
+    if token_type_ids is None:
+        token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=device)
+
+    extended_attention_mask: torch.Tensor = self.get_extended_attention_mask(
+        attention_mask, input_shape, self.device
+    )
+
+    if self.config.is_decoder and encoder_hidden_states is not None:
+        encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states.size()
+        encoder_hidden_shape = (encoder_batch_size, encoder_sequence_length)
+        if encoder_attention_mask is None:
+            encoder_attention_mask = torch.ones(encoder_hidden_shape, device=device)
+        encoder_extended_attention_mask = self.invert_attention_mask(encoder_attention_mask)
+    else:
+        encoder_extended_attention_mask = None
+
+    head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
+
+    embedding_output = self.embeddings(
+        input_ids=input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds
+    )
+    encoder_outputs = self.encoder(
+        embedding_output,
+        attention_mask=extended_attention_mask,
+        head_mask=head_mask,
+        encoder_hidden_states=encoder_hidden_states,
+        encoder_attention_mask=encoder_extended_attention_mask,
+    )
+    # sequence_output = encoder_outputs[0]
+    sequence_output = concat_all_encoders_hidden_states(encoder_outputs.hidden_states, self.rnn, self.linears)
+
+    pooled_output = self.pooler(sequence_output)
+
+    outputs = (sequence_output, pooled_output,) + encoder_outputs[1:]
+    return outputs
+
+
+def bind_fusion(model):
+    model.bert.rnn = nn.GRU(model.bert.config.hidden_size, model.bert.config.hidden_size, batch_first=True,
+                            bidirectional=True)
+    model.bert.linears = nn.ModuleList([nn.Linear(model.bert.config.hidden_size * 2, 1) for i in range(12)])
+
+    from functools import partial
+    forward = partial(fusion_forward, model.bert)
+    model.bert.forward = forward
