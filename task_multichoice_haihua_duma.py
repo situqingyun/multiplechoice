@@ -3,7 +3,7 @@ from torchblocks.metrics.classification import Accuracy
 from torchblocks.callback import TrainLogger
 from torchblocks.utils import seed_everything, dict_to_text, build_argparse
 from torchblocks.utils import prepare_device, get_checkpoints
-from model.modeling_nezha import NeZhaForMultipleChoice, NeZhaForMultipleChoiceWithMatch
+from model.modeling_nezha import NeZhaForMultipleChoice, NeZhaForMultipleChoiceWithMatch, NeZhaForMultipleChoiceWithDUMA
 from model.configuration_nezha import NeZhaConfig
 from transformers import BertForMultipleChoice, BertConfig, BertTokenizer, WEIGHTS_NAME
 from transformers import XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer
@@ -63,7 +63,7 @@ class CommonDataProcessor(DCMNMultipleChoiceProcessor):
 
 
 MODEL_CLASSES = {
-    'nezha': (NeZhaConfig, NeZhaForMultipleChoiceWithMatch, BertTokenizer),
+    'nezha': (NeZhaConfig, NeZhaForMultipleChoiceWithDUMA, BertTokenizer),
     'bert': (BertConfig, BertForMultipleChoiceWithDUMA, BertTokenizer),
     'xlnet': (XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer)
 }

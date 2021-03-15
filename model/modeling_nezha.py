@@ -1444,15 +1444,47 @@ class MeanPooler(nn.Module):
         pooled_output = self.activation(pooled_output)
         return pooled_output
 
+#Mean Pooling - Take attention mask into account for correct averaging
+def mean_pooling(model_output, attention_mask):
+    token_embeddings = model_output[0] #First element of model_output contains all token embeddings
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
+    sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+    return sum_embeddings / sum_mask
+
+# # DUMA
+# class DUMA(nn.Module):
+#     def __init__(self, config):
+#         super(DUMA, self).__init__()
+#         self.attention = NeZhaSelfAttention(config)
+#         self.pooler = MeanPooler(config)
+#         self.outputlayer = BertSelfOutput(config)
+#
+#     def forward(self, sequence_output, doc_len, ques_len, option_len):
+#         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
+#             sequence_output, doc_len, ques_len, option_len)
+#         doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output)
+#         ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output)
+#         # fuse: summarize
+#         # output = doc_encoder+ques_option_encoder
+#         # output = torch.add(doc_encoder, ques_option_encoder)
+#         doc_pooled_output = self.pooler(doc_encoder[0])
+#         ques_option_pooled_output = self.pooler(ques_option_encoder[0])
+#
+#         output = self.outputlayer(doc_pooled_output, ques_option_pooled_output)
+#
+#         output = self.pooler(output)
+#         return output
+
 # DUMA
 class DUMA(nn.Module):
     def __init__(self, config):
         super(DUMA, self).__init__()
         self.attention = NeZhaSelfAttention(config)
         self.pooler = MeanPooler(config)
-        self.outputlayer = BertSelfOutput(config)
+        # self.outputlayer = BertSelfOutput(config)
 
-    def forward(self, sequence_output, doc_len, ques_len, option_len):
+    def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
             sequence_output, doc_len, ques_len, option_len)
         doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output)
@@ -1465,17 +1497,20 @@ class DUMA(nn.Module):
 
         output = self.outputlayer(doc_pooled_output, ques_option_pooled_output)
 
-        output = self.pooler(output)
+        # output = self.pooler(output)
+        output = mean_pooling(sequence_output, attention_mask)
         return output
 
 
-class BertForMultipleChoiceWithDUMA(NeZhaPreTrainedModel):
+class NeZhaForMultipleChoiceWithDUMA(NeZhaPreTrainedModel):
     def __init__(self, config, num_choices=2):
-        super(BertForMultipleChoiceWithDUMA, self).__init__(config)
+        super(NeZhaForMultipleChoiceWithDUMA, self).__init__(config)
         self.num_choices = num_choices
         self.bert = NeZhaModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.duma = DUMA(config)
+        # self.duma = DUMA(config)
+        duma = DUMA(config)
+        self.dumas = nn.ModuleList([duma for _ in range(2)])
         self.pooler = self.bert.pooler
         self.classifier = nn.Linear(config.hidden_size, 1)
         self.init_weights()
@@ -1494,11 +1529,15 @@ class BertForMultipleChoiceWithDUMA(NeZhaPreTrainedModel):
         flat_attention_mask = attention_mask.view(-1, attention_mask.size(-1))
 
         outputs = self.bert(flat_input_ids, flat_token_type_ids, flat_attention_mask)
-        sequence_output = outputs.last_hidden_state
+        # sequence_output = outputs.last_hidden_state
+        sequence_output = outputs[0]
 
-        duma = self.duma(sequence_output, doc_len, ques_len, option_len)
-        duma = self.duma(duma, doc_len, ques_len, option_len)
-        pooled_output = self.pooler(duma)
+        # duma = self.duma(sequence_output, doc_len, ques_len, option_len)
+        # duma = self.duma(duma, doc_len, ques_len, option_len)
+        # duma = None
+        for i, duma_module in enumerate(self.dumas):
+            sequence_output = duma_module(sequence_output, doc_len, ques_len, option_len, attention_mask)
+        pooled_output = self.pooler(sequence_output)
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, num_choices)
@@ -1514,7 +1553,5 @@ class BertForMultipleChoiceWithDUMA(NeZhaPreTrainedModel):
 
         return MultipleChoiceModelOutput(
             loss=match_loss,
-            logits=reshaped_logits,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
+            logits=reshaped_logits
         )
