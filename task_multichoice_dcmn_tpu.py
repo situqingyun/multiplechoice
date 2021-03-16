@@ -70,6 +70,16 @@ MODEL_CLASSES = {
     'xlnet': (XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer)
 }
 
+import builtins
+
+old_print = builtins.print
+
+def new_print(context):
+    builtins.print = old_print
+    xm.master_print(context)
+    builtins.print=new_print
+
+new_print = new_print
 
 def tpu_run(index, args, logger, config_class, model_class, processor, train_dataset, eval_dataset, test_dataset):
     import torch_xla
@@ -81,7 +91,7 @@ def tpu_run(index, args, logger, config_class, model_class, processor, train_dat
 
     device = xm.xla_device()
     args.device = device
-    args.n_gpu = xm.xrt_world_size()
+    # args.n_gpu = xm.xrt_world_size()
     print("Process", index, "obtained, using device:", xm.xla_real_devices([str(device)])[0])
 
     # This ensures that the pretrained weights will only be

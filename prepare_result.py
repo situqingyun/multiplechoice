@@ -39,5 +39,10 @@ def prepare_result(predict_result_file, test_file):
 
 
 if __name__ == '__main__':
-    prepare_result('outputs/haihua_output/bert-base-uncased/nezha-cn-base_haihua8334_predict_test_logits.pkl', 'dataset/haihua/validation.json')
+    # prepare_result('outputs/haihua_output/longformer-chinese-base-4096/logs/longformer-chinese-base-4096_haihua9716_predict_test_logits.pkl', 'dataset/haihua/validation.json')
+    # prepare_result('outputs/haihua_output/dcmn-nezha/nezha-cn-base_haihua13880_predict_test_logits.pkl', 'dataset/haihua/validation.json')
+    # prepare_result(
+    #     'outputs/haihua_output/nezha-base-www/nezha-cn-base_haihua11104_predict_test_logits.pkl',
+    #     'dataset/haihua/validation.json')
+    prepare_result('outputs/haihua_output/duma-nezha/nezha-cn-base_haihua15615_predict_test_logits.pkl', 'dataset/haihua/validation.json')
 

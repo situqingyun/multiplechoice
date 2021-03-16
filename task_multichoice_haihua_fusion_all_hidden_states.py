@@ -13,7 +13,7 @@ from torchblocks.processor import InputExample
 from torchblocks.trainer.classifier_trainer import TextClassifierTrainer
 from processor.multiple_choice_processor import MultipleChoiceProcessor
 from torch.utils.data import random_split
-from model.modeling_bert import bind_fusion
+
 
 import json
 
@@ -63,6 +63,7 @@ class CommonDataProcessor(MultipleChoiceProcessor):
 
         return examples
 
+
 # models = [
 #     ('bert', 'hfl/chinese-roberta-wwm-ext'),
 #     ('xlnet', 'hfl/chinese-xlnet-base'),
@@ -77,7 +78,7 @@ MODEL_CLASSES = {
     'bert': (BertConfig, BertForMultipleChoice, BertTokenizer),
     'xlnet': (XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer),
     'longformer': (LongformerConfig, LongformerForMultipleChoice, LongformerTokenizer),
-    'albert':(AlbertConfig, AlbertForMultipleChoice, BertTokenizer)
+    'albert': (AlbertConfig, AlbertForMultipleChoice, BertTokenizer)
 }
 
 
@@ -94,7 +95,8 @@ def main():
     parser.add_argument('--attention_probs_dropout_prob', type=float, default=0)
 
     # 中文存在问题
-    parser.add_argument("--do_debug", action="store_true", help="the do_debug only uses the first 10")
+    parser.add_argument("--do_debug", action="store_true", default=False, help="the do_debug only uses the first 10")
+    parser.add_argument("--do_fusion", action="store_true", default=False, help="concencate all hidden states")
 
     args = parser.parse_args()
     if args.model_path is None:
@@ -130,14 +132,19 @@ def main():
                                           cache_dir=args.cache_dir if args.cache_dir else None)
     config.output_hidden_states = True
     model = model_class.from_pretrained(args.model_path, config=config)
-    bind_fusion(model)
+    if args.do_fusion:
+        if args.model_type=='nezha':
+            from model.modeling_nezha import bind_fusion
+        else:
+            from model.modeling_bert import bind_fusion
+        bind_fusion(model)
     model.to(args.device)
 
     # trainer
     logger.info("initializing traniner")
     trainer = TextClassifierTrainer(logger=logger, args=args, collate_fn=processor.collate_fn,
-                            input_keys=processor.get_input_keys(),
-                            metrics=[Accuracy()])
+                                    input_keys=processor.get_input_keys(),
+                                    metrics=[Accuracy()])
     # trainer = AlumTrainer(logger=logger, args=args, collate_fn=processor.collate_fn,
     #                         input_keys=processor.get_input_keys(),
     #                         metrics=[Accuracy()])
@@ -154,8 +161,8 @@ def main():
         train_dataset, eval_dataset = random_split(train_dataset, [train_size, eval_size])
 
         if args.do_debug:
-            train_dataset, _ = random_split(train_dataset, [2, len(train_dataset)-2])
-            eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset)-2])
+            train_dataset, _ = random_split(train_dataset, [2, len(train_dataset) - 2])
+            eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset) - 2])
 
         trainer.train(model, train_dataset=train_dataset, eval_dataset=eval_dataset)
     # do eval
@@ -201,7 +208,7 @@ def main():
         test_dataset = processor.create_dataset(args.eval_max_seq_length, 'validation.json', 'test')
 
         if args.do_debug:
-            test_dataset, _ = random_split(test_dataset, [2, len(test_dataset)-2])
+            test_dataset, _ = random_split(test_dataset, [2, len(test_dataset) - 2])
 
         if args.checkpoint_number != 0:
             checkpoints = get_checkpoints(args.output_dir, args.checkpoint_number, WEIGHTS_NAME)
@@ -215,8 +222,6 @@ def main():
             model = model_class.from_pretrained(checkpoint)
             model.to(args.device)
             trainer.predict(model, test_dataset=test_dataset, prefix=str(global_step))
-
-
 
 
 if __name__ == "__main__":
