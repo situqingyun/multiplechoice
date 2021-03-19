@@ -1491,7 +1491,7 @@ class DUMA(nn.Module):
         super(DUMA, self).__init__()
         self.attention = NeZhaSelfAttention(config)
         self.pooler = MeanPooler(config)
-        # self.outputlayer = BertSelfOutput(config)
+        self.outputlayer = BertSelfOutput(config)
 
     def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
@@ -1507,7 +1507,7 @@ class DUMA(nn.Module):
         output = self.outputlayer(doc_pooled_output, ques_option_pooled_output)
 
         # output = self.pooler(output)
-        output = mean_pooling(sequence_output, attention_mask)
+        # output = mean_pooling(sequence_output, attention_mask)
         return output
 
 
@@ -1517,9 +1517,7 @@ class NeZhaForMultipleChoiceWithDUMA(NeZhaPreTrainedModel):
         self.num_choices = num_choices
         self.bert = NeZhaModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        # self.duma = DUMA(config)
-        duma = DUMA(config)
-        self.dumas = nn.ModuleList([duma for _ in range(2)])
+        self.dumas = nn.ModuleList([DUMA(config) for _ in range(2)])
         self.pooler = self.bert.pooler
         self.classifier = nn.Linear(config.hidden_size, 1)
         self.init_weights()
