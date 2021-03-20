@@ -9,11 +9,11 @@ from transformers import BertForMultipleChoice, BertConfig, BertTokenizer, WEIGH
 from transformers import XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer
 from transformers import LongformerForMultipleChoice, LongformerConfig, LongformerTokenizer
 from transformers import AlbertForMultipleChoice, AlbertConfig
+from transformers import ElectraConfig, ElectraForMultipleChoice, ElectraTokenizer
 from torchblocks.processor import InputExample
 from torchblocks.trainer.classifier_trainer import TextClassifierTrainer
 from processor.multiple_choice_processor import MultipleChoiceProcessor
 from torch.utils.data import random_split
-
 
 import json
 
@@ -77,7 +77,8 @@ MODEL_CLASSES = {
     'bert': (BertConfig, BertForMultipleChoice, BertTokenizer),
     'xlnet': (XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer),
     'longformer': (LongformerConfig, LongformerForMultipleChoice, LongformerTokenizer),
-    'albert':(AlbertConfig, AlbertForMultipleChoice, BertTokenizer)
+    'albert':(AlbertConfig, AlbertForMultipleChoice, BertTokenizer),
+    "electra": (ElectraConfig, ElectraForMultipleChoice, ElectraTokenizer)
 }
 
 

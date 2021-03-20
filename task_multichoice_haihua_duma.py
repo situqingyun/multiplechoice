@@ -15,6 +15,13 @@ from model.modeling_bert import BertForMultipleChoiceWithMatch, BertForMultipleC
 from transformers import LongformerForMultipleChoice, LongformerConfig, LongformerTokenizer
 from model.modeling_longformer import LongformerForMultipleChoiceWithDUMA
 from model.modeling_xlnet import XLNetForMultipleChoiceWithDUMA
+from model.longformer.longformer import *
+from transformers import RobertaTokenizer
+from transformers import ElectraConfig, ElectraForMultipleChoice, ElectraTokenizer
+from model.modeling_electra import ElectraForMultipleChoiceDUMA
+# tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+# config = LongformerConfig.from_pretrained('schen/longformer-chinese-base-4096')
+# model = Longformer.from_pretrained('schen/longformer-chinese-base-4096', config=config)
 
 import json
 
@@ -69,7 +76,9 @@ MODEL_CLASSES = {
     'nezha': (NeZhaConfig, NeZhaForMultipleChoiceWithDUMA, BertTokenizer),
     'bert': (BertConfig, BertForMultipleChoiceWithDUMA, BertTokenizer),
     'xlnet': (XLNetConfig, XLNetForMultipleChoiceWithDUMA, XLNetTokenizer),
-    'longformer': (LongformerConfig, LongformerForMultipleChoiceWithDUMA, LongformerTokenizer)
+    # 'longformer': (LongformerConfig, LongformerForMultipleChoiceWithDUMA, LongformerTokenizer)
+    # 'longformer': (LongformerConfig, Longformer, RobertaTokenizer)
+    "electra": (ElectraConfig, ElectraForMultipleChoiceDUMA, ElectraTokenizer)
 }
 
 
@@ -124,7 +133,7 @@ def main():
 
     # fusion
     config.output_hidden_states = True
-    model = model_class.from_pretrained(args.model_path, config=config) # , mirror='tuna'
+    model = model_class.from_pretrained(args.model_path, config=config, mirror='tuna') # , mirror='tuna'
     if args.do_fusion:
         if args.model_type=='nezha':
             from model.modeling_nezha import bind_fusion
