@@ -1496,8 +1496,8 @@ class DUMA(nn.Module):
     def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
             sequence_output, doc_len, ques_len, option_len)
-        doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output)
-        ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output)
+        doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output, attention_mask=attention_mask)
+        ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output, attention_mask=attention_mask)
         # fuse: summarize
         # output = doc_encoder+ques_option_encoder
         # output = torch.add(doc_encoder, ques_option_encoder)
