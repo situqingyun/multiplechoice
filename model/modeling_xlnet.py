@@ -1,33 +1,34 @@
 from transformers.models.xlnet.modeling_xlnet import *
-from model.modeling_bert import DUMA
+from model.modeling_bert import *
 
 
-# # DUMA
-# class DUMA(nn.Module):
-#     def __init__(self, config):
-#         super(DUMA, self).__init__()
-#         self.attention = BertSelfAttention(config)
-#         self.pooler = MeanPooler(config)
-#         self.outputlayer = BertSelfOutput(config)
-#
-#     def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
-#         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
-#             sequence_output, doc_len, ques_len, option_len)
-#         doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output, attention_mask=attention_mask)
-#         ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output, attention_mask=attention_mask)
-#         # fuse: summarize
-#         # output = doc_encoder+ques_option_encoder
-#         # output = torch.add(doc_encoder, ques_option_encoder)
-#
-#         doc_pooled_output = self.pooler(doc_encoder[0])
-#         ques_option_pooled_output = self.pooler(ques_option_encoder[0])
-#         # doc_pooled_output = mean_pooling(doc_encoder, attention_mask)
-#         # ques_option_pooled_output = mean_pooling(ques_option_encoder, attention_mask)
-#
-#         output = self.outputlayer(doc_pooled_output, ques_option_pooled_output)
-#
-#         # output = self.pooler(output)
-#         return output
+# DUMA
+class DUMA(nn.Module):
+    def __init__(self, config):
+        super(DUMA, self).__init__()
+        beert_config = BertConfig.from_pretrained('hfl/chinese-roberta-wwm-ext', num_labels=4)
+        self.attention = BertSelfAttention(beert_config)
+        self.pooler = MeanPooler(beert_config)
+        self.outputlayer = BertSelfOutput(beert_config)
+
+    def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
+        doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
+            sequence_output, doc_len, ques_len, option_len)
+        doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output, attention_mask=attention_mask)
+        ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output, attention_mask=attention_mask)
+        # fuse: summarize
+        # output = doc_encoder+ques_option_encoder
+        # output = torch.add(doc_encoder, ques_option_encoder)
+
+        doc_pooled_output = self.pooler(doc_encoder[0])
+        ques_option_pooled_output = self.pooler(ques_option_encoder[0])
+        # doc_pooled_output = mean_pooling(doc_encoder, attention_mask)
+        # ques_option_pooled_output = mean_pooling(ques_option_encoder, attention_mask)
+
+        output = self.outputlayer(doc_pooled_output, ques_option_pooled_output)
+
+        # output = self.pooler(output)
+        return output
 
 
 class XLNetForMultipleChoiceWithDUMA(XLNetPreTrainedModel):
@@ -37,11 +38,11 @@ class XLNetForMultipleChoiceWithDUMA(XLNetPreTrainedModel):
         self.transformer = XLNetModel(config)
         self.sequence_summary = SequenceSummary(config)
         self.logits_proj = nn.Linear(config.d_model, 1)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        # self.dropout = nn.Dropout(config.hidden_dropout_prob)
         # self.duma = DUMA(config)
         # duma = DUMA(config)
         self.dumas = nn.ModuleList([DUMA(config) for _ in range(1)])
-        self.pooler = self.bert.pooler
+        # self.pooler = self.bert.pooler
         # self.classifier = nn.Linear(config.hidden_size, 1)
         self.init_weights()
 
@@ -83,6 +84,10 @@ class XLNetForMultipleChoiceWithDUMA(XLNetPreTrainedModel):
             if inputs_embeds is not None
             else None
         )
+
+        doc_len = doc_len.view(-1, doc_len.size(0) * doc_len.size(1)).squeeze()
+        ques_len = ques_len.view(-1, ques_len.size(0) * ques_len.size(1)).squeeze()
+        option_len = option_len.view(-1, option_len.size(0) * option_len.size(1)).squeeze()
 
         transformer_outputs = self.transformer(
             flat_input_ids,
