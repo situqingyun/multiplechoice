@@ -14,6 +14,7 @@ from torch.utils.data import random_split
 from model.modeling_bert import BertForMultipleChoiceWithMatch, BertForMultipleChoiceWithDUMA
 from transformers import LongformerForMultipleChoice, LongformerConfig, LongformerTokenizer
 from model.modeling_longformer import LongformerForMultipleChoiceWithDUMA
+from model.modeling_xlnet import XLNetForMultipleChoiceWithDUMA
 
 import json
 
@@ -67,7 +68,7 @@ class CommonDataProcessor(DCMNMultipleChoiceProcessor):
 MODEL_CLASSES = {
     'nezha': (NeZhaConfig, NeZhaForMultipleChoiceWithDUMA, BertTokenizer),
     'bert': (BertConfig, BertForMultipleChoiceWithDUMA, BertTokenizer),
-    'xlnet': (XLNetConfig, XLNetForMultipleChoice, XLNetTokenizer),
+    'xlnet': (XLNetConfig, XLNetForMultipleChoiceWithDUMA, XLNetTokenizer),
     'longformer': (LongformerConfig, LongformerForMultipleChoiceWithDUMA, LongformerTokenizer)
 }
 
@@ -123,7 +124,7 @@ def main():
 
     # fusion
     config.output_hidden_states = True
-    model = model_class.from_pretrained(args.model_path, config=config, mirror='tuna')
+    model = model_class.from_pretrained(args.model_path, config=config) # , mirror='tuna'
     if args.do_fusion:
         if args.model_type=='nezha':
             from model.modeling_nezha import bind_fusion

@@ -15,6 +15,7 @@ python task_multichoice_haihua.py \
   --do_train \
   --do_eval \
   --do_predict \
+  --gradient_accumulation_steps=1 \
   --gpu=0 \
   --adv_K=3 \
   --patience=4 \
