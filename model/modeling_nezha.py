@@ -1562,7 +1562,7 @@ class NeZhaForMultipleChoiceWithDUMA(NeZhaPreTrainedModel):
 
 class NeZhaForMultipleChoiceWithDUMAAndDCMN(NeZhaPreTrainedModel):
     def __init__(self, config, num_choices=2):
-        super(NeZhaForMultipleChoiceWithDUMA, self).__init__(config)
+        super(NeZhaForMultipleChoiceWithDUMAAndDCMN, self).__init__(config)
         self.num_choices = num_choices
         self.bert = NeZhaModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)

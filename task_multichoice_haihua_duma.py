@@ -83,6 +83,7 @@ def main():
 
     # 中文存在问题
     parser.add_argument("--do_debug", action="store_true", help="the do_debug only uses the first 10")
+    parser.add_argument("--do_fusion", action="store_true", default=False, help="concencate all hidden states")
 
     args = parser.parse_args()
     if args.model_path is None:
@@ -116,7 +117,17 @@ def main():
     logger.info("initializing model and config")
     config = config_class.from_pretrained(args.model_path, num_labels=num_labels,
                                           cache_dir=args.cache_dir if args.cache_dir else None)
+
+    # fusion
+    config.output_hidden_states = True
     model = model_class.from_pretrained(args.model_path, config=config)
+    if args.do_fusion:
+        if args.model_type=='nezha':
+            from model.modeling_nezha import bind_fusion
+        else:
+            from model.modeling_bert import bind_fusion
+        bind_fusion(model)
+
     model.to(args.device)
 
     # trainer

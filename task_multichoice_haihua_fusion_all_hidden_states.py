@@ -130,6 +130,8 @@ def main():
     logger.info("initializing model and config")
     config = config_class.from_pretrained(args.model_path, num_labels=num_labels,
                                           cache_dir=args.cache_dir if args.cache_dir else None)
+
+    # fusion
     config.output_hidden_states = True
     model = model_class.from_pretrained(args.model_path, config=config)
     if args.do_fusion:
@@ -138,6 +140,7 @@ def main():
         else:
             from model.modeling_bert import bind_fusion
         bind_fusion(model)
+
     model.to(args.device)
 
     # trainer
