@@ -164,7 +164,7 @@ def main():
         train_dataset, eval_dataset = random_split(train_dataset, [train_size, val_size])
 
         if args.do_debug:
-            train_dataset, _ = random_split(train_dataset, [2, len(train_dataset) - 2])
+            train_dataset, _ = random_split(train_dataset, [6, len(train_dataset) - 6])
             eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset) - 2])
 
         trainer.train(model, train_dataset=train_dataset, eval_dataset=eval_dataset)

@@ -1,4 +1,6 @@
 from transformers.models.electra.modeling_electra import *
+from transformers.models.bert.modeling_bert import *
+
 
 def seperate_seq(sequence_output, doc_len, ques_len, option_len):
     doc_seq_output = sequence_output.new(sequence_output.size()).zero_()
@@ -24,7 +26,8 @@ class DUMA(nn.Module):
         super(DUMA, self).__init__()
         self.attention = ElectraSelfAttention(config)
         # self.pooler = MeanPooler(config)
-        self.outputlayer = ElectraOutput(config)
+        # self.outputlayer = ElectraOutput(config)
+        self.outputlayer = BertSelfOutput(config)
 
     def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
@@ -40,7 +43,7 @@ class DUMA(nn.Module):
         # doc_pooled_output = mean_pooling(doc_encoder, attention_mask)
         # ques_option_pooled_output = mean_pooling(ques_option_encoder, attention_mask)
 
-        output = self.outputlayer(doc_encoder, ques_option_encoder)
+        output = self.outputlayer(doc_encoder[0], ques_option_encoder[0])
 
         # output = self.pooler(output)
         return output
@@ -52,7 +55,7 @@ class ElectraForMultipleChoiceDUMA(ElectraPreTrainedModel):
         self.electra = ElectraModel(config)
         self.sequence_summary = SequenceSummary(config)
         self.classifier = nn.Linear(config.hidden_size, 1)
-
+        self.dumas = nn.ModuleList([DUMA(config) for _ in range(2)])
         self.init_weights()
 
     def forward(
