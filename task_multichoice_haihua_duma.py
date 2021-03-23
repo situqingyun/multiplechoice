@@ -173,8 +173,8 @@ def main():
             eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset) - 2], generator=torch.Generator().manual_seed(args.seed))
 
         if args.save_guid:
-            train_guid_total = train_dataset.dataset.dataset.tensors[0].numpy().tolist()
-            eval_guid_total = eval_dataset.dataset.dataset.tensors[0].numpy().tolist()
+            train_guid_total = train_dataset.dataset.tensors[0].numpy().tolist()
+            eval_guid_total = eval_dataset.dataset.tensors[0].numpy().tolist()
             guid = {'train': [train_guid_total[g] for g in train_dataset.indices],
                     'eval': [eval_guid_total[g] for g in eval_dataset.indices],
                     'train_indices': [i for i in train_dataset.indices],
