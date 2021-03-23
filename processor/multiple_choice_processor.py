@@ -146,7 +146,7 @@ class DCMNMultipleChoiceProcessor(DataProcessor):
         '''
         inputs输入对应的keys，需要跟模型输入对应
         '''
-        keys = ['input_ids', 'attention_mask', 'token_type_ids', 'doc_len', 'ques_len', 'option_len']
+        keys = ['guid', 'input_ids', 'attention_mask', 'token_type_ids', 'doc_len', 'ques_len', 'option_len']
         if self.encode_mode == 'one':
             return keys + ['labels']
         elif self.encode_mode == 'pair':

@@ -19,6 +19,7 @@ from model.longformer.longformer import *
 from transformers import RobertaTokenizer
 from transformers import ElectraConfig, ElectraForMultipleChoice, ElectraTokenizer
 from model.modeling_electra import ElectraForMultipleChoiceDUMA
+import torch
 # tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
 # config = LongformerConfig.from_pretrained('schen/longformer-chinese-base-4096')
 # model = Longformer.from_pretrained('schen/longformer-chinese-base-4096', config=config)
@@ -94,9 +95,12 @@ def main():
     parser.add_argument('--hidden_dropout_prob', type=float, default=0.1)
     parser.add_argument('--attention_probs_dropout_prob', type=float, default=0)
 
-    # 中文存在问题
     parser.add_argument("--do_debug", action="store_true", help="the do_debug only uses the first 10")
     parser.add_argument("--do_fusion", action="store_true", default=False, help="concencate all hidden states")
+    # 保存guid
+    parser.add_argument("--save_guid", action="store_true", default=False, help="save guid")
+    # 加载指定数列切分
+    parser.add_argument("--load_guid", action="store_true", default=False, help="load guid")
 
     args = parser.parse_args()
     if args.model_path is None:
@@ -133,9 +137,9 @@ def main():
 
     # fusion
     config.output_hidden_states = True
-    model = model_class.from_pretrained(args.model_path, config=config, mirror='tuna') # , mirror='tuna'
+    model = model_class.from_pretrained(args.model_path, config=config)  # , mirror='tuna'
     if args.do_fusion:
-        if args.model_type=='nezha':
+        if args.model_type == 'nezha':
             from model.modeling_nezha import bind_fusion
         else:
             from model.modeling_bert import bind_fusion
@@ -161,11 +165,29 @@ def main():
         train_size = int(threshold * len(train_dataset))
         val_size = len(train_dataset) - train_size
 
-        train_dataset, eval_dataset = random_split(train_dataset, [train_size, val_size])
+        # 加入generator，固定随机种子
+        train_dataset, eval_dataset = random_split(train_dataset, [train_size, val_size], generator=torch.Generator().manual_seed(args.seed))
 
         if args.do_debug:
-            train_dataset, _ = random_split(train_dataset, [6, len(train_dataset) - 6])
-            eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset) - 2])
+            train_dataset, _ = random_split(train_dataset, [6, len(train_dataset) - 6], generator=torch.Generator().manual_seed(args.seed))
+            eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset) - 2], generator=torch.Generator().manual_seed(args.seed))
+
+        if args.save_guid:
+            train_guid_total = train_dataset.dataset.dataset.tensors[0].numpy().tolist()
+            eval_guid_total = eval_dataset.dataset.dataset.tensors[0].numpy().tolist()
+            guid = {'train': [train_guid_total[g] for g in train_dataset.indices],
+                    'eval': [eval_guid_total[g] for g in eval_dataset.indices],
+                    'train_indices': [i for i in train_dataset.indices],
+                    'eval_indices': [i for i in eval_dataset.indices]
+                    }
+            with open('guid.json', 'w') as f:
+                json.dump(guid, f, indent=4, ensure_ascii=False)
+
+        if args.load_guid:
+            with open('guid.json', 'r') as f:
+                indices_dict = json.load(f)
+                train_dataset.indices = indices_dict['train_indices']
+                eval_dataset.indices = indices_dict['eval_indices']
 
         trainer.train(model, train_dataset=train_dataset, eval_dataset=eval_dataset)
     # do eval
@@ -211,7 +233,7 @@ def main():
         test_dataset = processor.create_dataset(args.eval_max_seq_length, 'validation.json', 'test')
 
         if args.do_debug:
-            test_dataset, _ = random_split(test_dataset, [2, len(test_dataset) - 2])
+            test_dataset, _ = random_split(test_dataset, [2, len(test_dataset) - 2], generator=torch.Generator().manual_seed(args.seed))
 
         if args.checkpoint_number != 0:
             checkpoints = get_checkpoints(args.output_dir, args.checkpoint_number, WEIGHTS_NAME)
