@@ -175,8 +175,8 @@ def main():
         if args.save_guid:
             train_guid_total = train_dataset.dataset.tensors[0].numpy().tolist()
             eval_guid_total = eval_dataset.dataset.tensors[0].numpy().tolist()
-            guid = {'train': [train_guid_total[g] for g in train_dataset.indices],
-                    'eval': [eval_guid_total[g] for g in eval_dataset.indices],
+            guid = {'train': train_guid_total,
+                    'eval': eval_guid_total,
                     'train_indices': [i for i in train_dataset.indices],
                     'eval_indices': [i for i in eval_dataset.indices]
                     }
