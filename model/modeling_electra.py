@@ -1,6 +1,19 @@
 from transformers.models.electra.modeling_electra import *
 from transformers.models.bert.modeling_bert import *
 
+class MeanPooler(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.activation = nn.Tanh()
+
+    def forward(self, hidden_states):
+        # We "pool" the model by simply taking the hidden state corresponding
+        # to the first token.
+        first_token_tensor = hidden_states
+        pooled_output = self.dense(first_token_tensor)
+        pooled_output = self.activation(pooled_output)
+        return pooled_output
 
 def seperate_seq(sequence_output, doc_len, ques_len, option_len):
     doc_seq_output = sequence_output.new(sequence_output.size()).zero_()
@@ -20,32 +33,59 @@ def seperate_seq(sequence_output, doc_len, ques_len, option_len):
                                                    i] + 2]
     return doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output
 
+# # DUMA
+# class DUMA(nn.Module):
+#     def __init__(self, config):
+#         super(DUMA, self).__init__()
+#         self.attention = ElectraSelfAttention(config)
+#         # self.pooler = MeanPooler(config)
+#         # self.outputlayer = ElectraOutput(config)
+#         self.outputlayer = BertSelfOutput(config)
+#
+#     def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
+#         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
+#             sequence_output, doc_len, ques_len, option_len)
+#         doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output, attention_mask=attention_mask)
+#         ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output, attention_mask=attention_mask)
+#         # fuse: summarize
+#         # output = doc_encoder+ques_option_encoder
+#         # output = torch.add(doc_encoder, ques_option_encoder)
+#
+#         # doc_pooled_output = self.pooler(doc_encoder[0])
+#         # ques_option_pooled_output = self.pooler(ques_option_encoder[0])
+#         # doc_pooled_output = mean_pooling(doc_encoder, attention_mask)
+#         # ques_option_pooled_output = mean_pooling(ques_option_encoder, attention_mask)
+#
+#         output = self.outputlayer(doc_encoder[0], ques_option_encoder[0])
+#
+#         # output = self.pooler(output)
+#         return output
+
 # DUMA
 class DUMA(nn.Module):
     def __init__(self, config):
         super(DUMA, self).__init__()
-        self.attention = ElectraSelfAttention(config)
-        # self.pooler = MeanPooler(config)
-        # self.outputlayer = ElectraOutput(config)
+        self.attention = BertSelfAttention(config)
+        self.pooler = MeanPooler(config)
         self.outputlayer = BertSelfOutput(config)
 
     def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
             sequence_output, doc_len, ques_len, option_len)
-        doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output, attention_mask=attention_mask)
-        ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output, attention_mask=attention_mask)
+        doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output,
+                                     attention_mask=attention_mask)
+        ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output,
+                                             attention_mask=attention_mask)
         # fuse: summarize
         # output = doc_encoder+ques_option_encoder
         # output = torch.add(doc_encoder, ques_option_encoder)
+        doc_pooled_output = self.pooler(doc_encoder[0])
+        ques_option_pooled_output = self.pooler(ques_option_encoder[0])
 
-        # doc_pooled_output = self.pooler(doc_encoder[0])
-        # ques_option_pooled_output = self.pooler(ques_option_encoder[0])
-        # doc_pooled_output = mean_pooling(doc_encoder, attention_mask)
-        # ques_option_pooled_output = mean_pooling(ques_option_encoder, attention_mask)
+        output = self.outputlayer(doc_pooled_output, ques_option_pooled_output)
 
-        output = self.outputlayer(doc_encoder[0], ques_option_encoder[0])
-
-        # output = self.pooler(output)
+        output = self.pooler(output)
+        # output = mean_pooling(sequence_output, attention_mask)
         return output
 
 class ElectraForMultipleChoiceDUMA(ElectraPreTrainedModel):
@@ -55,7 +95,7 @@ class ElectraForMultipleChoiceDUMA(ElectraPreTrainedModel):
         self.electra = ElectraModel(config)
         self.sequence_summary = SequenceSummary(config)
         self.classifier = nn.Linear(config.hidden_size, 1)
-        self.dumas = nn.ModuleList([DUMA(config) for _ in range(2)])
+        self.dumas = nn.ModuleList([DUMA(config) for _ in range(1)])
         self.init_weights()
 
     def forward(
@@ -70,7 +110,7 @@ class ElectraForMultipleChoiceDUMA(ElectraPreTrainedModel):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
-        doc_len=None, ques_len=None, option_len=None,
+        doc_len=None, ques_len=None, option_len=None, guid=None
     ):
         r"""
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):

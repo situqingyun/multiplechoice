@@ -242,6 +242,54 @@ def mean_pooling(model_output, attention_mask):
     sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
     return sum_embeddings / sum_mask
 
+
+class DUMAOutput(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.cat = nn.Linear(2, 1)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def forward(self, hidden_states, input_tensor):
+        hidden_states = torch.cat([torch.unsqueeze(hidden_states, -1), torch.unsqueeze(input_tensor, -1)], axis=-1)
+        hidden_states = self.cat(hidden_states)
+        hidden_states = torch.squeeze(hidden_states, -1)
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states)
+        return hidden_states
+
+# # DUMA
+# class DUMA(nn.Module):
+#     def __init__(self, config):
+#         super(DUMA, self).__init__()
+#         self.attention = BertSelfAttention(config)
+#         self.pooler = MeanPooler(config)
+#         self.outputlayer = DUMAOutput(config)
+#
+#     def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
+#         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
+#             sequence_output, doc_len, ques_len, option_len)
+#         doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output,
+#                                      attention_mask=attention_mask)
+#         ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output,
+#                                              attention_mask=attention_mask)
+#         # fuse: summarize
+#         # output = doc_encoder+ques_option_encoder
+#         # output = torch.add(doc_encoder, ques_option_encoder)
+#
+#         doc_pooled_output = self.pooler(doc_encoder[0])
+#         ques_option_pooled_output = self.pooler(ques_option_encoder[0])
+#         # doc_pooled_output = mean_pooling(doc_encoder, attention_mask)
+#         # ques_option_pooled_output = mean_pooling(ques_option_encoder, attention_mask)
+#
+#         output = self.outputlayer(doc_pooled_output, ques_option_pooled_output)
+#
+#         # output = self.pooler(output)
+#         return output
+
+
 # DUMA
 class DUMA(nn.Module):
     def __init__(self, config):
@@ -253,87 +301,21 @@ class DUMA(nn.Module):
     def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
             sequence_output, doc_len, ques_len, option_len)
-        doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output, attention_mask=attention_mask)
-        ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output, attention_mask=attention_mask)
+        doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output,
+                                     attention_mask=attention_mask)
+        ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output,
+                                             attention_mask=attention_mask)
         # fuse: summarize
         # output = doc_encoder+ques_option_encoder
         # output = torch.add(doc_encoder, ques_option_encoder)
-
         doc_pooled_output = self.pooler(doc_encoder[0])
         ques_option_pooled_output = self.pooler(ques_option_encoder[0])
-        # doc_pooled_output = mean_pooling(doc_encoder, attention_mask)
-        # ques_option_pooled_output = mean_pooling(ques_option_encoder, attention_mask)
 
         output = self.outputlayer(doc_pooled_output, ques_option_pooled_output)
 
-        # output = self.pooler(output)
+        output = self.pooler(output)
+        # output = mean_pooling(sequence_output, attention_mask)
         return output
-
-
-# class BertForMultipleChoiceWithDUMA(BertPreTrainedModel):
-#     def __init__(self, config, num_choices=2):
-#         super(BertForMultipleChoiceWithDUMA, self).__init__(config)
-#         self.num_choices = num_choices
-#         self.bert = BertModel(config)
-#         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-#         # self.duma = DUMA(config)
-#         duma = DUMA(config)
-#         self.dumas = nn.ModuleList([duma for _ in range(2)])
-#         self.pooler = self.bert.pooler
-#         self.classifier = nn.Linear(config.hidden_size, 1)
-#         self.init_weights()
-#
-#     def forward(self, input_ids=None, token_type_ids=None, attention_mask=None, doc_len=None, ques_len=None,
-#                 option_len=None, labels=None, is_3=False, return_dict=None):
-#         r"""
-#             labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):
-#             Labels for computing the multiple choice classification loss. Indices should be in ``[0, ...,
-#             num_choices-1]`` where :obj:`num_choices` is the size of the second dimension of the input tensors. (See
-#             :obj:`input_ids` above)
-#         """
-#         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-#         num_choices = input_ids.shape[1]
-#
-#         flat_input_ids = input_ids.view(-1, input_ids.size(-1))
-#         doc_len = doc_len.view(-1, doc_len.size(0) * doc_len.size(1)).squeeze()
-#         ques_len = ques_len.view(-1, ques_len.size(0) * ques_len.size(1)).squeeze()
-#         option_len = option_len.view(-1, option_len.size(0) * option_len.size(1)).squeeze()
-#
-#         flat_token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1))
-#         flat_attention_mask = attention_mask.view(-1, attention_mask.size(-1))
-#
-#         outputs = self.bert(flat_input_ids, flat_token_type_ids, flat_attention_mask)
-#         sequence_output = outputs.last_hidden_state
-#
-#         # doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
-#         #     sequence_output, doc_len, ques_len, option_len)
-#         #
-#         # duma = self.duma(doc_seq_output, ques_option_seq_output)
-#         # duma = self.duma(sequence_output, doc_len, ques_len, option_len)
-#         # duma = self.duma(duma, doc_len, ques_len, option_len)
-#         for i, duma_module in enumerate(self.dumas):
-#             sequence_output = duma_module(sequence_output, doc_len, ques_len, option_len, flat_attention_mask)
-#         # pooled_output = self.pooler(sequence_output)
-#         pooled_output = mean_pooling(sequence_output, flat_attention_mask)
-#         pooled_output = self.dropout(pooled_output)
-#         logits = self.classifier(pooled_output)
-#         reshaped_logits = logits.view(-1, num_choices)
-#
-#         match_loss = None
-#         if labels is not None:
-#             loss_fct = CrossEntropyLoss()
-#             match_loss = loss_fct(reshaped_logits, labels)
-#
-#         if not return_dict:
-#             output = (reshaped_logits,) + outputs[2:]
-#             return ((match_loss,) + output) if match_loss is not None else output
-#
-#         return MultipleChoiceModelOutput(
-#             loss=match_loss,
-#             logits=reshaped_logits,
-#             hidden_states=outputs.hidden_states,
-#             attentions=outputs.attentions,
-#         )
 
 class BertForMultipleChoiceWithDUMA(BertPreTrainedModel):
     def __init__(self, config, num_choices=2):
@@ -343,12 +325,12 @@ class BertForMultipleChoiceWithDUMA(BertPreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         # self.duma = DUMA(config)
         duma = DUMA(config)
-        self.dumas = nn.ModuleList([duma for _ in range(2)])
+        self.dumas = nn.ModuleList([duma for _ in range(1)])
         self.pooler = self.bert.pooler
         self.classifier = nn.Linear(config.hidden_size, 1)
         self.init_weights()
 
-    def forward(self, input_ids=None, token_type_ids=None, attention_mask=None, doc_len=None, ques_len=None, position_ids=None, inputs_embeds=None,
+    def forward(self, input_ids=None, token_type_ids=None, attention_mask=None, doc_len=None, ques_len=None, guid=None,
                 option_len=None, labels=None, is_3=False, return_dict=None):
         r"""
             labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):
@@ -357,39 +339,17 @@ class BertForMultipleChoiceWithDUMA(BertPreTrainedModel):
             :obj:`input_ids` above)
         """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
+        num_choices = input_ids.shape[1]
 
-        flat_input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
-        flat_attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
-        flat_token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
-        position_ids = position_ids.view(-1, position_ids.size(-1)) if position_ids is not None else None
-        inputs_embeds = (
-            inputs_embeds.view(-1, inputs_embeds.size(-2), inputs_embeds.size(-1))
-            if inputs_embeds is not None
-            else None
-        )
-
-        # return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        # num_choices = input_ids.shape[1]
-
-        # flat_input_ids = input_ids.view(-1, input_ids.size(-1))
+        flat_input_ids = input_ids.view(-1, input_ids.size(-1))
         doc_len = doc_len.view(-1, doc_len.size(0) * doc_len.size(1)).squeeze()
         ques_len = ques_len.view(-1, ques_len.size(0) * ques_len.size(1)).squeeze()
         option_len = option_len.view(-1, option_len.size(0) * option_len.size(1)).squeeze()
 
-        # flat_token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1))
-        # flat_attention_mask = attention_mask.view(-1, attention_mask.size(-1))
+        flat_token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1))
+        flat_attention_mask = attention_mask.view(-1, attention_mask.size(-1))
 
-        # outputs = self.bert(flat_input_ids, flat_token_type_ids, flat_attention_mask)
-        outputs = self.bert(
-            flat_input_ids,
-            attention_mask=flat_attention_mask,
-            token_type_ids=flat_token_type_ids,
-            position_ids=position_ids,
-            inputs_embeds=inputs_embeds,
-            return_dict=return_dict,
-        )
-
+        outputs = self.bert(flat_input_ids, flat_token_type_ids, flat_attention_mask)
         sequence_output = outputs.last_hidden_state
 
         # doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
@@ -422,6 +382,96 @@ class BertForMultipleChoiceWithDUMA(BertPreTrainedModel):
             attentions=outputs.attentions,
         )
 
+# class BertForMultipleChoiceWithDUMA(BertPreTrainedModel):
+#     def __init__(self, config, num_choices=2):
+#         super(BertForMultipleChoiceWithDUMA, self).__init__(config)
+#         self.num_choices = num_choices
+#         self.bert = BertModel(config)
+#         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+#         # self.duma = DUMA(config)
+#         duma = DUMA(config)
+#         self.dumas = nn.ModuleList([duma for _ in range(2)])
+#         self.pooler = self.bert.pooler
+#         self.classifier = nn.Linear(config.hidden_size, 1)
+#         self.init_weights()
+#
+#     def forward(self, input_ids=None, token_type_ids=None, attention_mask=None,
+#                 doc_len=None, ques_len=None, guid=None, option_len=None,
+#                 position_ids=None, inputs_embeds=None,
+#                 labels=None, is_3=False, return_dict=None):
+#         r"""
+#             labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):
+#             Labels for computing the multiple choice classification loss. Indices should be in ``[0, ...,
+#             num_choices-1]`` where :obj:`num_choices` is the size of the second dimension of the input tensors. (See
+#             :obj:`input_ids` above)
+#         """
+#         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+#         num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
+#
+#         flat_input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
+#         flat_attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
+#         flat_token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
+#         position_ids = position_ids.view(-1, position_ids.size(-1)) if position_ids is not None else None
+#         inputs_embeds = (
+#             inputs_embeds.view(-1, inputs_embeds.size(-2), inputs_embeds.size(-1))
+#             if inputs_embeds is not None
+#             else None
+#         )
+#
+#         # return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+#         # num_choices = input_ids.shape[1]
+#
+#         # flat_input_ids = input_ids.view(-1, input_ids.size(-1))
+#         doc_len = doc_len.view(-1, doc_len.size(0) * doc_len.size(1)).squeeze()
+#         ques_len = ques_len.view(-1, ques_len.size(0) * ques_len.size(1)).squeeze()
+#         option_len = option_len.view(-1, option_len.size(0) * option_len.size(1)).squeeze()
+#
+#         # flat_token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1))
+#         # flat_attention_mask = attention_mask.view(-1, attention_mask.size(-1))
+#
+#         # outputs = self.bert(flat_input_ids, flat_token_type_ids, flat_attention_mask)
+#         outputs = self.bert(
+#             flat_input_ids,
+#             attention_mask=flat_attention_mask,
+#             token_type_ids=flat_token_type_ids,
+#             position_ids=position_ids,
+#             inputs_embeds=inputs_embeds,
+#             return_dict=return_dict,
+#         )
+#
+#         sequence_output = outputs.last_hidden_state
+#
+#         # doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
+#         #     sequence_output, doc_len, ques_len, option_len)
+#         #
+#         # duma = self.duma(doc_seq_output, ques_option_seq_output)
+#         # duma = self.duma(sequence_output, doc_len, ques_len, option_len)
+#         # duma = self.duma(duma, doc_len, ques_len, option_len)
+#         for i, duma_module in enumerate(self.dumas):
+#             sequence_output = duma_module(sequence_output, doc_len, ques_len, option_len, flat_attention_mask)
+#         # pooled_output = self.pooler(sequence_output)
+#         pooled_output = mean_pooling(sequence_output, flat_attention_mask)
+#         pooled_output = self.dropout(pooled_output)
+#         logits = self.classifier(pooled_output)
+#         reshaped_logits = logits.view(-1, num_choices)
+#
+#         match_loss = None
+#         if labels is not None:
+#             loss_fct = CrossEntropyLoss()
+#             match_loss = loss_fct(reshaped_logits, labels)
+#
+#         if not return_dict:
+#             output = (reshaped_logits,) + outputs[2:]
+#             return ((match_loss,) + output) if match_loss is not None else output
+#
+#         return MultipleChoiceModelOutput(
+#             loss=match_loss,
+#             logits=reshaped_logits,
+#             hidden_states=outputs.hidden_states,
+#             attentions=outputs.attentions,
+#         )
+
+
 class BertForMultipleChoiceWithDUMAAndDCMN(BertPreTrainedModel):
     def __init__(self, config, num_choices=2):
         super(BertForMultipleChoiceWithDUMAAndDCMN, self).__init__(config)
@@ -442,7 +492,8 @@ class BertForMultipleChoiceWithDUMAAndDCMN(BertPreTrainedModel):
         self.classifier = nn.Linear(config.hidden_size, 1)
         self.init_weights()
 
-    def forward(self, input_ids=None, token_type_ids=None, attention_mask=None, doc_len=None, ques_len=None, position_ids=None, inputs_embeds=None,
+    def forward(self, input_ids=None, token_type_ids=None, attention_mask=None, doc_len=None, ques_len=None,
+                position_ids=None, inputs_embeds=None,
                 option_len=None, labels=None, is_3=False, return_dict=None):
         r"""
             labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):
@@ -520,7 +571,6 @@ class BertForMultipleChoiceWithDUMAAndDCMN(BertPreTrainedModel):
 
         pooled_output = torch.cat([pa_fuse, pq_fuse, qa_fuse], 1)
         # dcmn end
-
 
         # pooled_output = mean_pooling(sequence_output, flat_attention_mask)
         pooled_output = self.dropout(pooled_output)

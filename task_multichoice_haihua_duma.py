@@ -15,7 +15,7 @@ from model.modeling_bert import BertForMultipleChoiceWithMatch, BertForMultipleC
 from transformers import LongformerForMultipleChoice, LongformerConfig, LongformerTokenizer
 from model.modeling_longformer import LongformerForMultipleChoiceWithDUMA
 from model.modeling_xlnet import XLNetForMultipleChoiceWithDUMA
-from model.longformer.longformer import *
+# from model.longformer.longformer import *
 from transformers import RobertaTokenizer
 from transformers import ElectraConfig, ElectraForMultipleChoice, ElectraTokenizer
 from model.modeling_electra import ElectraForMultipleChoiceDUMA
@@ -166,11 +166,11 @@ def main():
         val_size = len(train_dataset) - train_size
 
         # 加入generator，固定随机种子
-        train_dataset, eval_dataset = random_split(train_dataset, [train_size, val_size], generator=torch.Generator().manual_seed(args.seed))
+        train_dataset, eval_dataset = random_split(train_dataset, [train_size, val_size])   # , generator=torch.Generator().manual_seed(args.seed)
 
         if args.do_debug:
-            train_dataset, _ = random_split(train_dataset, [6, len(train_dataset) - 6], generator=torch.Generator().manual_seed(args.seed))
-            eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset) - 2], generator=torch.Generator().manual_seed(args.seed))
+            train_dataset, _ = random_split(train_dataset, [6, len(train_dataset) - 6]) # , generator=torch.Generator().manual_seed(args.seed)
+            eval_dataset, _ = random_split(eval_dataset, [2, len(eval_dataset) - 2])    # , generator=torch.Generator().manual_seed(args.seed)
 
         if args.save_guid:
             train_guid_total = train_dataset.dataset.tensors[0].numpy().tolist()
@@ -233,7 +233,7 @@ def main():
         test_dataset = processor.create_dataset(args.eval_max_seq_length, 'validation.json', 'test')
 
         if args.do_debug:
-            test_dataset, _ = random_split(test_dataset, [2, len(test_dataset) - 2], generator=torch.Generator().manual_seed(args.seed))
+            test_dataset, _ = random_split(test_dataset, [2, len(test_dataset) - 2])    # , generator=torch.Generator().manual_seed(args.seed)
 
         if args.checkpoint_number != 0:
             checkpoints = get_checkpoints(args.output_dir, args.checkpoint_number, WEIGHTS_NAME)

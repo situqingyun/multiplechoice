@@ -1485,19 +1485,77 @@ def mean_pooling(model_output, attention_mask):
 #         output = self.pooler(output)
 #         return output
 
-# DUMA
+# # DUMA
+# class DUMA(nn.Module):
+#     def __init__(self, config):
+#         super(DUMA, self).__init__()
+#         self.attention = NeZhaSelfAttention(config)
+#         self.pooler = MeanPooler(config)
+#         self.outputlayer = BertSelfOutput(config)
+#
+#     def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
+#         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
+#             sequence_output, doc_len, ques_len, option_len)
+#         doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output, attention_mask=attention_mask)
+#         ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output, attention_mask=attention_mask)
+#         # fuse: summarize
+#         # output = doc_encoder+ques_option_encoder
+#         # output = torch.add(doc_encoder, ques_option_encoder)
+#         doc_pooled_output = self.pooler(doc_encoder[0])
+#         ques_option_pooled_output = self.pooler(ques_option_encoder[0])
+#
+#         output = self.outputlayer(doc_pooled_output, ques_option_pooled_output)
+#
+#         # output = self.pooler(output)
+#         # output = mean_pooling(sequence_output, attention_mask)
+#         return output
+
+class AddOutput(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def forward(self, hidden_states, input_tensor):
+        hidden_states = hidden_states + input_tensor
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states)
+        return hidden_states
+
+
+class ConcentrateOutput(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size * 2, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def forward(self, doc_pooled_output, ques_option_pooled_output):
+        hidden_states = torch.cat([doc_pooled_output, ques_option_pooled_output], axis=-1)
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states)
+        return hidden_states
+
+
+# DUMA2 concentrate
 class DUMA(nn.Module):
     def __init__(self, config):
         super(DUMA, self).__init__()
         self.attention = NeZhaSelfAttention(config)
         self.pooler = MeanPooler(config)
-        self.outputlayer = BertSelfOutput(config)
+        # self.outputlayer = AddOutput(config)
+        self.outputlayer = ConcentrateOutput(config)
 
     def forward(self, sequence_output, doc_len, ques_len, option_len, attention_mask=None):
         doc_ques_seq_output, ques_option_seq_output, doc_seq_output, ques_seq_output, option_seq_output = seperate_seq(
             sequence_output, doc_len, ques_len, option_len)
-        doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output, attention_mask=attention_mask)
-        ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output, attention_mask=attention_mask)
+        doc_encoder = self.attention(doc_seq_output, encoder_hidden_states=ques_option_seq_output,
+                                     attention_mask=attention_mask)
+        ques_option_encoder = self.attention(ques_option_seq_output, encoder_hidden_states=doc_seq_output,
+                                             attention_mask=attention_mask)
         # fuse: summarize
         # output = doc_encoder+ques_option_encoder
         # output = torch.add(doc_encoder, ques_option_encoder)
@@ -1523,7 +1581,7 @@ class NeZhaForMultipleChoiceWithDUMA(NeZhaPreTrainedModel):
         self.init_weights()
 
     def forward(self, input_ids=None, token_type_ids=None, attention_mask=None, doc_len=None, ques_len=None,
-                option_len=None, labels=None, is_3=False, return_dict=None):
+                option_len=None, labels=None, is_3=False, return_dict=None, guid = None):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         num_choices = input_ids.shape[1]
 
@@ -1559,6 +1617,7 @@ class NeZhaForMultipleChoiceWithDUMA(NeZhaPreTrainedModel):
             loss=match_loss,
             logits=reshaped_logits
         )
+
 
 class NeZhaForMultipleChoiceWithDUMAAndDCMN(NeZhaPreTrainedModel):
     def __init__(self, config, num_choices=2):
@@ -1623,7 +1682,6 @@ class NeZhaForMultipleChoiceWithDUMAAndDCMN(NeZhaPreTrainedModel):
         pooled_output = torch.cat([pa_fuse, pq_fuse, qa_fuse], 1)
         # dcmn end
 
-
         # pooled_output = mean_pooling(sequence_output, flat_attention_mask)
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier3(pooled_output)
@@ -1642,6 +1700,7 @@ class NeZhaForMultipleChoiceWithDUMAAndDCMN(NeZhaPreTrainedModel):
             loss=match_loss,
             logits=reshaped_logits
         )
+
 
 class NeZhaForMultipleChoiceWithFocalLoss(NeZhaPreTrainedModel):
     def __init__(self, config):
