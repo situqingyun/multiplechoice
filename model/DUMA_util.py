@@ -52,7 +52,7 @@ class NeZhaSelfAttention(nn.Module):
         self.key = nn.Linear(config.hidden_size, self.all_head_size)
         self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
-        if  hasattr(config, 'max_relative_position'):
+        if not hasattr(config, 'max_relative_position'):
             config.max_relative_position = 64
         self.relative_positions_encoding = RelativePositionsEncoding(length=512, depth=self.attention_head_size,
                                                                      max_relative_position=config.max_relative_position)
