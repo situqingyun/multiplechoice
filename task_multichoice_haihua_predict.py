@@ -12,7 +12,7 @@ from torchblocks.trainer.classifier_trainer import TextClassifierTrainer
 from processor.multiple_choice_processor import DCMNMultipleChoiceProcessor
 from torch.utils.data import random_split
 from model.modeling_bert import BertForMultipleChoiceWithDUMA
-from model.modeling_roberta import RobertaForMultipleChoiceWithDUMA
+# from model.modeling_roberta import RobertaForMultipleChoiceWithDUMA
 from model.modeling_xlnet import XLNetForMultipleChoiceWithDUMA
 from transformers import RobertaTokenizer, RobertaConfig
 from transformers import ElectraConfig, ElectraTokenizer
